@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: agency-reporter-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+      - BIGQUERY_PROJECT_ID=your-project-id
+      - BIGQUERY_DATASET=your-dataset
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=gpt-4o
+    volumes:
+      - ./credentials.json:/app/credentials.json:ro
+    networks:
+      - agency-network
+
+  frontend:
+    build: ./frontend
+    container_name: agency-reporter-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - agency-network
+
+networks:
+  agency-network:
+    driver: bridge 
