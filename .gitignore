@@ -26,8 +26,9 @@ venv/
 # Node.js
 node_modules/
 npm-debug.log
-yarn-debug.log
 yarn-error.log
+yarn-debug.log
+package-lock.json
 .pnp
 .pnp.js
 coverage/
@@ -52,8 +53,11 @@ build/
 
 # BigQuery credentials
 *credentials*.json
-*serviceaccount*.json
-*key*.json
+*-credentials*.json
+*.key
+*-key*.json
+*-a47c654480a8.json
+gcpxbixpflegehilfesenioren-a47c654480a8.json
 
 # Logs
 logs
@@ -87,4 +91,20 @@ data/*.json
 data/*.xlsx
 data/*.db
 *.sqlite
-*.sqlite3 
+*.sqlite3
+
+# Environment variables and sensitive information
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+
+# Build and distribution directories
+/dist
+/build
+/storybook-static
+
+# Local data
+data/local/ 
