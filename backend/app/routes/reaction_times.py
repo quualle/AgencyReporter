@@ -127,3 +127,130 @@ def _calculate_industry_average(agencies_data: List[Dict[str, Any]]) -> Dict[str
             averages[key] = 0
     
     return averages 
+
+@router.get("/{agency_id}/posting_to_reservation")
+async def get_posting_to_reservation_stats(
+    agency_id: str,
+    start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Median und Durchschnitt (in Stunden) von Posting bis Reservierung für eine Agentur
+    """
+    try:
+        bq = BigQueryConnection()
+        if not start_date or not end_date:
+            from ..utils.query_manager import QueryManager
+            qm = QueryManager()
+            start_date, end_date = qm._calculate_date_range(time_period)
+        stats = bq.get_posting_to_reservation_stats(agency_id, start_date, end_date)
+        median_hours = stats["median_hours"]
+        avg_hours = stats["avg_hours"]
+        return {
+            "agency_id": agency_id,
+            "median_hours": f"{median_hours:.2f}" if median_hours is not None else None,
+            "avg_hours": f"{avg_hours:.2f}" if avg_hours is not None else None,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch posting_to_reservation stats: {str(e)}")
+
+@router.get("/{agency_id}/reservation_to_first_proposal")
+async def get_reservation_to_first_proposal_stats(
+    agency_id: str,
+    start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Median und Durchschnitt (in Stunden) von Reservierung bis zum ersten Personalvorschlag (CareStay) für eine Agentur
+    """
+    try:
+        bq = BigQueryConnection()
+        if not start_date or not end_date:
+            from ..utils.query_manager import QueryManager
+            qm = QueryManager()
+            start_date, end_date = qm._calculate_date_range(time_period)
+        stats = bq.get_reservation_to_first_proposal_stats(agency_id, start_date, end_date)
+        median_hours = stats["median_hours"]
+        avg_hours = stats["avg_hours"]
+        return {
+            "agency_id": agency_id,
+            "median_hours": f"{median_hours:.2f}" if median_hours is not None else None,
+            "avg_hours": f"{avg_hours:.2f}" if avg_hours is not None else None,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch reservation_to_first_proposal stats: {str(e)}")
+
+@router.get("/{agency_id}/proposal_to_cancellation")
+async def get_proposal_to_cancellation_stats(
+    agency_id: str,
+    start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Median und Durchschnitt (in Stunden) von Personalvorschlag (presented_at) bis Abbruch (vor Anreise) für abgebrochene CareStays
+    """
+    try:
+        bq = BigQueryConnection()
+        if not start_date or not end_date:
+            from ..utils.query_manager import QueryManager
+            qm = QueryManager()
+            start_date, end_date = qm._calculate_date_range(time_period)
+        stats = bq.get_proposal_to_cancellation_stats(agency_id, start_date, end_date)
+        median_hours = stats["median_hours"]
+        avg_hours = stats["avg_hours"]
+        return {
+            "agency_id": agency_id,
+            "median_hours": f"{median_hours:.2f}" if median_hours is not None else None,
+            "avg_hours": f"{avg_hours:.2f}" if avg_hours is not None else None,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch proposal_to_cancellation stats: {str(e)}")
+
+@router.get("/{agency_id}/arrival_to_cancellation")
+async def get_arrival_to_cancellation_stats(
+    agency_id: str,
+    start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Median und Durchschnitt (in Stunden) von geplanter Anreise (arrival) bis Abbruch (vor Anreise) für abgebrochene CareStays
+    Aufgeteilt in: overall, first_stays (Neukunden), followup_stays (Wechsel)
+    """
+    try:
+        bq = BigQueryConnection()
+        if not start_date or not end_date:
+            from ..utils.query_manager import QueryManager
+            qm = QueryManager()
+            start_date, end_date = qm._calculate_date_range(time_period)
+        stats = bq.get_arrival_to_cancellation_stats(agency_id, start_date, end_date)
+        def fmt(val):
+            return f"{val:.2f}" if val is not None else None
+        return {
+            "agency_id": agency_id,
+            "overall": {
+                "median_hours": fmt(stats["overall"]["median_hours"]) if stats["overall"] else None,
+                "avg_hours": fmt(stats["overall"]["avg_hours"]) if stats["overall"] else None
+            },
+            "first_stays": {
+                "median_hours": fmt(stats["first_stays"]["median_hours"]) if stats["first_stays"] else None,
+                "avg_hours": fmt(stats["first_stays"]["avg_hours"]) if stats["first_stays"] else None
+            },
+            "followup_stays": {
+                "median_hours": fmt(stats["followup_stays"]["median_hours"]) if stats["followup_stays"] else None,
+                "avg_hours": fmt(stats["followup_stays"]["avg_hours"]) if stats["followup_stays"] else None
+            },
+            "start_date": start_date,
+            "end_date": end_date
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch arrival_to_cancellation stats: {str(e)}") 

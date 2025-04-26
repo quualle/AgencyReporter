@@ -471,6 +471,10 @@ class QueryManager:
         # Calculate cancellation rate
         proposal_count = proposal_results[0]["proposal_count"] if proposal_results else 0
         cancelled_count = cancelled_results[0]["abgebrochen_vor_arrival"] if cancelled_results else 0
+        lt_3_days = cancelled_results[0]["lt_3_days"] if cancelled_results else 0
+        btw_3_7_days = cancelled_results[0]["btw_3_7_days"] if cancelled_results else 0
+        btw_8_14_days = cancelled_results[0]["btw_8_14_days"] if cancelled_results else 0
+        btw_15_30_days = cancelled_results[0]["btw_15_30_days"] if cancelled_results else 0
         
         ratio = 0
         if proposal_count > 0:
@@ -480,15 +484,28 @@ class QueryManager:
         if proposal_results:
             agency_name = proposal_results[0]["agency_name"]
         
+        # Helper to format bucket output
+        def bucket_output(row, total):
+            def rel(val):
+                return f"{(val / total) * 100:.1f}%" if total > 0 else "0.0%"
+            return {
+                "count": row["abgebrochen_vor_arrival"],
+                "lt_3_days": {"count": row["lt_3_days"], "ratio": rel(row["lt_3_days"])} ,
+                "btw_3_7_days": {"count": row["btw_3_7_days"], "ratio": rel(row["btw_3_7_days"])} ,
+                "btw_8_14_days": {"count": row["btw_8_14_days"], "ratio": rel(row["btw_8_14_days"])} ,
+                "btw_15_30_days": {"count": row["btw_15_30_days"], "ratio": rel(row["btw_15_30_days"])}
+            }
+        
+        # Map results by group
+        buckets = {row["gruppe"]: bucket_output(row, row["abgebrochen_vor_arrival"]) for row in cancelled_results}
+        
         return {
             "agency_id": agency_id,
             "agency_name": agency_name,
             "proposal_count": proposal_count,
-            "cancelled_before_arrival_count": cancelled_count,
-            "cancellation_ratio": ratio,
-            "ratio_percentage": f"{ratio * 100:.1f}%",
+            "cancellation_buckets": buckets,
             "name": "Abbruchrate vor Anreise",
-            "description": "Zeigt, wie viel % der vorgeschlagenen Pflegekräfte von der Agentur wieder abgebrochen wurden (vor Anreise)"
+            "description": "Zeigt, wie viel % der vorgeschlagenen Pflegekräfte von der Agentur wieder abgebrochen wurden (vor Anreise), aufgeschlüsselt nach Kurzfristigkeit und Erstanreise/Wechsel."
         }
         
     def get_completion_rate(self, agency_id: str, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> Dict[str, Any]:

@@ -208,7 +208,8 @@ WITH parsed AS (
     cs._id,
     cs.arrival,
     cs.created_at,
-    cs.visor_id,  -- Für die Filterung nach Agentur nutzen wir visor_id
+    cs.visor_id,
+    cs.is_swap,
     JSON_EXTRACT_ARRAY(cs.tracks) AS track_array
   FROM
     `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
@@ -220,20 +221,61 @@ WITH parsed AS (
     AND cs.arrival != ''
     AND v.agency_id = @agency_id
     AND cs.created_at BETWEEN @start_date AND @end_date
+),
+abbruchzeiten AS (
+  SELECT
+    p._id,
+    p.arrival,
+    p.visor_id,
+    p.is_swap,
+    MIN(TIMESTAMP(JSON_EXTRACT_SCALAR(track_item, '$.created_at'))) AS cancelled_at
+  FROM
+    parsed p,
+    UNNEST(p.track_array) AS track_item
+  WHERE
+    JSON_EXTRACT_SCALAR(track_item, '$.differences.stage[1]') = 'Abgebrochen'
+    AND TIMESTAMP(JSON_EXTRACT_SCALAR(track_item, '$.created_at')) < TIMESTAMP(p.arrival)
+  GROUP BY
+    p._id, p.arrival, p.visor_id, p.is_swap
+),
+diffs AS (
+  SELECT
+    _id,
+    visor_id,
+    is_swap,
+    TIMESTAMP_DIFF(TIMESTAMP(arrival), cancelled_at, DAY) AS days_before_arrival
+  FROM abbruchzeiten
+  WHERE TIMESTAMP_DIFF(TIMESTAMP(arrival), cancelled_at, DAY) >= 0
+    AND TIMESTAMP_DIFF(TIMESTAMP(arrival), cancelled_at, DAY) <= 30
 )
 SELECT
-  COUNT(DISTINCT _id) AS abgebrochen_vor_arrival
-FROM parsed,
-UNNEST(track_array) AS track_item
-WHERE
-  JSON_EXTRACT_SCALAR(track_item, '$.differences.stage[1]') = 'Abgebrochen'
-  AND (
-    JSON_EXTRACT_SCALAR(track_item, '$.differences.stage[0]') = 'Vorgestellt'
-    OR JSON_EXTRACT_SCALAR(track_item, '$.differences.stage[0]') = 'Angenommen'
-    OR JSON_EXTRACT_SCALAR(track_item, '$.differences.stage[0]') = 'Bestätigt'
-    OR JSON_EXTRACT_SCALAR(track_item, '$.differences.stage[0]') = 'Neu'
-  )
-  AND TIMESTAMP(JSON_EXTRACT_SCALAR(track_item, '$.created_at')) < TIMESTAMP(arrival)
+  'gesamt' AS gruppe,
+  COUNT(*) AS abgebrochen_vor_arrival,
+  COUNTIF(days_before_arrival < 3) AS lt_3_days,
+  COUNTIF(days_before_arrival BETWEEN 3 AND 7) AS btw_3_7_days,
+  COUNTIF(days_before_arrival BETWEEN 8 AND 14) AS btw_8_14_days,
+  COUNTIF(days_before_arrival BETWEEN 15 AND 30) AS btw_15_30_days
+FROM diffs
+UNION ALL
+SELECT
+  'nur_erstanreise' AS gruppe,
+  COUNT(*) AS abgebrochen_vor_arrival,
+  COUNTIF(days_before_arrival < 3) AS lt_3_days,
+  COUNTIF(days_before_arrival BETWEEN 3 AND 7) AS btw_3_7_days,
+  COUNTIF(days_before_arrival BETWEEN 8 AND 14) AS btw_8_14_days,
+  COUNTIF(days_before_arrival BETWEEN 15 AND 30) AS btw_15_30_days
+FROM diffs
+WHERE is_swap = 'false'
+UNION ALL
+SELECT
+  'ohne_erstanreise' AS gruppe,
+  COUNT(*) AS abgebrochen_vor_arrival,
+  COUNTIF(days_before_arrival < 3) AS lt_3_days,
+  COUNTIF(days_before_arrival BETWEEN 3 AND 7) AS btw_3_7_days,
+  COUNTIF(days_before_arrival BETWEEN 8 AND 14) AS btw_8_14_days,
+  COUNTIF(days_before_arrival BETWEEN 15 AND 30) AS btw_15_30_days
+FROM diffs
+WHERE is_swap != 'false'
 """
 
 # 7. Quote: Pflegeeinsatz angetreten - Pflegeinsatz vollständig beendet

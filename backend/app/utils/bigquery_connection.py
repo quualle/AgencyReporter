@@ -465,4 +465,112 @@ class BigQueryConnection:
             return "TRUE"  # No date filter
         else:
             # Default to last quarter
-            return "date_field >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)" 
+            return "date_field >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)"
+    
+    def get_avg_time_posting_to_reservation(self, agency_id: str, start_date: str, end_date: str) -> float:
+        """
+        Get average time (in hours) from posting creation to reservation for a specific agency
+        """
+        from ..queries.reaction_times import reaction_times
+        query = reaction_times.TIME_POSTING_TO_RESERVATION
+        params = {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        result = self.execute_query(query, params)
+        return result[0]["avg_time_to_reservation"] if result and result[0]["avg_time_to_reservation"] is not None else 0.0
+    
+    def get_avg_time_reservation_to_first_proposal(self, agency_id: str, start_date: str, end_date: str) -> float:
+        """
+        Get average time (in hours) from reservation to first proposal (CareStay) for a specific agency
+        """
+        from ..queries.reaction_times import reaction_times
+        query = reaction_times.TIME_RESERVATION_TO_FIRST_PROPOSAL
+        params = {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        result = self.execute_query(query, params)
+        return result[0]["avg_time_to_first_proposal"] if result and result[0]["avg_time_to_first_proposal"] is not None else 0.0
+    
+    def get_posting_to_reservation_stats(self, agency_id: str, start_date: str, end_date: str) -> dict:
+        """
+        Get median and average time (in hours) from posting to reservation for a specific agency
+        """
+        from ..queries.reaction_times import reaction_times
+        query = reaction_times.TIME_POSTING_TO_RESERVATION_STATS
+        params = {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        result = self.execute_query(query, params)
+        if result:
+            return {
+                "median_hours": result[0]["median_hours"],
+                "avg_hours": result[0]["avg_hours"]
+            }
+        return {"median_hours": None, "avg_hours": None}
+
+    def get_reservation_to_first_proposal_stats(self, agency_id: str, start_date: str, end_date: str) -> dict:
+        """
+        Get median and average time (in hours) from reservation to first proposal for a specific agency
+        """
+        from ..queries.reaction_times import reaction_times
+        query = reaction_times.TIME_RESERVATION_TO_FIRST_PROPOSAL_STATS
+        params = {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        result = self.execute_query(query, params)
+        if result:
+            return {
+                "median_hours": result[0]["median_hours"],
+                "avg_hours": result[0]["avg_hours"]
+            }
+        return {"median_hours": None, "avg_hours": None}
+
+    def get_proposal_to_cancellation_stats(self, agency_id: str, start_date: str, end_date: str) -> dict:
+        """
+        Get median and average time (in hours) from proposal (presented_at) to cancellation (Abbruch vor Anreise) for a specific agency
+        """
+        from ..queries.reaction_times import reaction_times
+        query = reaction_times.TIME_PROPOSAL_TO_CANCELLATION_STATS
+        params = {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        result = self.execute_query(query, params)
+        if result:
+            return {
+                "median_hours": result[0]["median_hours"],
+                "avg_hours": result[0]["avg_hours"]
+            }
+        return {"median_hours": None, "avg_hours": None}
+
+    def get_arrival_to_cancellation_stats(self, agency_id: str, start_date: str, end_date: str) -> dict:
+        """
+        Get median and average time (in hours) from planned arrival to cancellation (Abbruch vor Anreise) for a specific agency,
+        aufgeteilt in overall, first_stays und followup_stays.
+        """
+        from ..queries.reaction_times import reaction_times
+        query = reaction_times.TIME_ARRIVAL_TO_CANCELLATION_STATS
+        params = {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        result = self.execute_query(query, params)
+        stats = {"overall": None, "first_stays": None, "followup_stays": None}
+        for row in result:
+            group = row.get("group_type")
+            if group in stats:
+                stats[group] = {
+                    "median_hours": row["median_hours"],
+                    "avg_hours": row["avg_hours"]
+                }
+        return stats 
