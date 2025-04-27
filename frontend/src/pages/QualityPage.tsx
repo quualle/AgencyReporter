@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../store/appStore';
-import apiService, { ProfileQualityData, ComparisonData } from '../services/api';
+import apiService from '../services/api';
 import Loading from '../components/common/Loading';
 import ErrorMessage from '../components/common/ErrorMessage';
 import {
@@ -31,8 +31,8 @@ interface ViolationCategory {
 const QualityPage: React.FC = () => {
   const { selectedAgency, timePeriod } = useAppStore();
   
-  const [profileData, setProfileData] = useState<ProfileQualityData | null>(null);
-  const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
+  const [profileData, setProfileData] = useState<any>(null);
+  const [comparisonData, setComparisonData] = useState<any>(null);
   const [violationCategories, setViolationCategories] = useState<ViolationCategory[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +48,7 @@ const QualityPage: React.FC = () => {
         // Fetch data in parallel
         const [profileResponse, comparisonResponse] = await Promise.all([
           apiService.getAgencyProfileQuality(selectedAgency.agency_id, timePeriod),
-          apiService.compareAgencyProfileQuality(selectedAgency.agency_id, timePeriod)
+          apiService.compareAgencyReactionTimes(selectedAgency.agency_id, timePeriod)
         ]);
         
         setProfileData(profileResponse);
@@ -246,7 +246,7 @@ const QualityPage: React.FC = () => {
               <span className="text-gray-600 dark:text-gray-300">Qualitätsrang:</span>
               <span className="font-medium text-gray-800 dark:text-white">
                 {comparisonData ? 
-                  `${comparisonData.all_agencies.findIndex(a => a.agency_id === selectedAgency.agency_id) + 1} von ${comparisonData.all_agencies.length}` :
+                  `${comparisonData.all_agencies.findIndex((a: any) => a.agency_id === selectedAgency.agency_id) + 1} von ${comparisonData.all_agencies.length}` :
                   'N/A'
                 }
               </span>

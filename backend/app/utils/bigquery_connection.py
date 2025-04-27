@@ -2,7 +2,7 @@ from typing import Dict, List, Any, Optional, Union
 from google.cloud import bigquery
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from ..dependencies import get_settings, get_bigquery_client
 
 # Set up logging
@@ -92,17 +92,17 @@ class BigQueryConnection:
         """
         query = f"""
         SELECT 
-            agency_id,
-            agency_name,
+            _id AS agency_id,
+            name AS agency_name,
             created_at,
-            status,
+            active AS status,
             location,
             contact_email,
             contact_phone
         FROM 
             `{self.project_id}.{self.dataset}.agencies`
         WHERE 
-            status = 'active'
+            active = 'true'
         ORDER BY 
             agency_name ASC
         """
@@ -111,104 +111,118 @@ class BigQueryConnection:
     
     def get_kpis_by_agency(self, agency_id: str, time_period: str = "last_quarter") -> Dict[str, Any]:
         """
-        Get KPIs for a specific agency
-        
-        Args:
-            agency_id (str): The ID of the agency
-            time_period (str): The time period for which to get the KPIs
-            
-        Returns:
-            dict: Dictionary with KPI information
+        Get KPIs (Quotas) for a specific agency based on care_stays
         """
-        # Calculate date range based on time period
-        date_filter = self._get_date_filter(time_period)
+        date_field = "cs.created_at"
+        date_filter = self._get_date_filter(time_period, date_field)
         
         query = f"""
         WITH 
+        agency_care_stays AS (
+            SELECT 
+                c.agency_id,
+                cs._id AS care_stay_id,
+                cs.stage,
+                cs.arrival,
+                cs.departure,
+                EXISTS (
+                    SELECT 1 FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track 
+                    WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+                    AND TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at')) <= TIMESTAMP(cs.arrival)
+                ) AS was_confirmed_before_arrival,
+                EXISTS (
+                    SELECT 1 FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track 
+                    WHERE JSON_EXTRACT_SCALAR(track, '$.differences.departure[0]') IS NOT NULL
+                ) AS departure_changed
+            FROM 
+                `{self.project_id}.{self.dataset}.care_stays` cs
+            JOIN 
+                `{self.project_id}.{self.dataset}.contracts` c ON cs.contract_id = c._id
+            WHERE 
+                c.agency_id = @agency_id
+                AND {date_filter}
+        ),
         agency_metrics AS (
             SELECT 
                 agency_id,
-                COUNT(DISTINCT job_id) AS total_jobs_viewed,
-                COUNT(DISTINCT CASE WHEN status = 'reserved' THEN job_id END) AS total_jobs_reserved,
-                COUNT(DISTINCT CASE WHEN status = 'fulfilled' THEN job_id END) AS total_jobs_fulfilled,
-                COUNT(DISTINCT CASE WHEN status = 'cancelled_by_agency' THEN job_id END) AS total_jobs_cancelled,
-                COUNT(DISTINCT CASE WHEN status = 'pending' THEN job_id END) AS total_jobs_pending,
-                COUNT(DISTINCT CASE WHEN status = 'caregiver_assigned' THEN job_id END) AS total_caregivers_assigned,
-                COUNT(DISTINCT CASE WHEN status = 'caregiver_started' THEN job_id END) AS total_caregivers_started,
-                COUNT(DISTINCT CASE WHEN status = 'ended_early' THEN job_id END) AS total_ended_early,
-                COUNT(DISTINCT CASE WHEN status = 'completed' THEN job_id END) AS total_completed
+                COUNT(care_stay_id) AS total_proposals,
+                COUNTIF(stage = 'Bestätigt' AND arrival IS NOT NULL AND departure IS NOT NULL AND TIMESTAMP(departure) < CURRENT_TIMESTAMP()) AS total_completed_scheduled,
+                COUNTIF(stage = 'Bestätigt' AND arrival IS NOT NULL) AS total_started,
+                COUNTIF(stage = 'Abgebrochen') AS total_cancelled,
+                COUNTIF(stage = 'Bestätigt' AND arrival IS NOT NULL AND departure_changed) AS total_ended_early
             FROM 
-                `{self.project_id}.{self.dataset}.job_placements`
-            WHERE 
-                agency_id = @agency_id
-                AND {date_filter}
+                agency_care_stays
             GROUP BY 
                 agency_id
         )
-        
         SELECT 
             am.*,
-            SAFE_DIVIDE(am.total_jobs_reserved, am.total_jobs_viewed) AS reservation_rate,
-            SAFE_DIVIDE(am.total_jobs_fulfilled, am.total_jobs_reserved) AS fulfillment_rate,
-            SAFE_DIVIDE(am.total_jobs_cancelled, am.total_jobs_reserved) AS cancellation_rate,
-            SAFE_DIVIDE(am.total_caregivers_started, am.total_caregivers_assigned) AS start_rate,
-            SAFE_DIVIDE(am.total_completed, am.total_caregivers_started) AS completion_rate,
-            SAFE_DIVIDE(am.total_ended_early, am.total_caregivers_started) AS early_end_rate
+            SAFE_DIVIDE(am.total_started, am.total_proposals) AS start_rate,
+            SAFE_DIVIDE(am.total_completed_scheduled, am.total_started) AS completion_rate,
+            SAFE_DIVIDE(am.total_ended_early, am.total_started) AS early_end_rate
         FROM 
             agency_metrics am
         """
         
         params = {"agency_id": agency_id}
-        
-        # Execute the query
         result = self.execute_query(query, params)
-        
-        # Return the first row if available, otherwise empty dict
         return result[0] if result else {}
     
     def get_response_times_by_agency(self, agency_id: str, time_period: str = "last_quarter") -> Dict[str, Any]:
         """
-        Get response times for a specific agency
-        
-        Args:
-            agency_id (str): The ID of the agency
-            time_period (str): The time period for which to get the response times
-            
-        Returns:
-            dict: Dictionary with response times information
+        Get simplified response times for a specific agency based on care_stays
+        NOTE: Some original metrics are hard to calculate without complex joins or dedicated event tables.
         """
-        # Calculate date range based on time period
-        date_filter = self._get_date_filter(time_period)
+        date_field = "cs.created_at"
+        date_filter = self._get_date_filter(time_period, date_field)
         
         query = f"""
         WITH 
         response_metrics AS (
             SELECT 
-                agency_id,
-                AVG(TIMESTAMP_DIFF(reservation_time, job_created_time, HOUR)) AS avg_time_to_reservation,
-                AVG(TIMESTAMP_DIFF(proposal_time, reservation_time, HOUR)) AS avg_time_to_proposal,
-                AVG(CASE WHEN status = 'cancelled_by_agency' THEN TIMESTAMP_DIFF(cancellation_time, proposal_time, HOUR) END) AS avg_time_to_cancellation,
-                AVG(CASE WHEN status = 'cancelled_by_agency' THEN TIMESTAMP_DIFF(planned_start_date, cancellation_time, HOUR) END) AS avg_time_before_start,
-                AVG(TIMESTAMP_DIFF(cancellation_time, reservation_time, HOUR)) AS avg_time_to_any_cancellation
+                c.agency_id,
+                AVG(TIMESTAMP_DIFF(TIMESTAMP(cs.arrival), TIMESTAMP(cs.presented_at), HOUR)) AS avg_time_proposal_to_arrival,
+                AVG(TIMESTAMP_DIFF(TIMESTAMP(cs.departure), TIMESTAMP(cs.arrival), HOUR)) AS avg_stay_duration_hours
             FROM 
-                `{self.project_id}.{self.dataset}.job_placements`
+                `{self.project_id}.{self.dataset}.care_stays` cs
+            JOIN
+                 `{self.project_id}.{self.dataset}.contracts` c ON cs.contract_id = c._id
             WHERE 
-                agency_id = @agency_id
+                c.agency_id = @agency_id
+                AND cs.presented_at IS NOT NULL
+                AND cs.arrival IS NOT NULL
+                AND cs.departure IS NOT NULL
                 AND {date_filter}
             GROUP BY 
-                agency_id
+                c.agency_id
         )
-        
         SELECT * FROM response_metrics
         """
         
         params = {"agency_id": agency_id}
-        
-        # Execute the query
         result = self.execute_query(query, params)
         
-        # Return the first row if available, otherwise empty dict
-        return result[0] if result else {}
+        # Prepare the final result dictionary, ensuring agency_id is included
+        final_result = {
+            "agency_id": agency_id, # Add the agency_id explicitly
+            "avg_time_to_reservation": 0.0, # Placeholder
+            "avg_time_to_proposal": 0.0, # Placeholder
+            "avg_time_to_cancellation": 0.0, # Placeholder
+            "avg_time_before_start": 0.0, # Placeholder
+            "avg_time_to_any_cancellation": 0.0, # Placeholder
+            "avg_time_proposal_to_arrival": None, # Initialize with None
+            "avg_stay_duration_hours": None # Initialize with None
+        }
+        
+        # Update with actual calculated values if query returned results
+        if result:
+            res = result[0]
+            final_result["avg_time_proposal_to_arrival"] = res.get("avg_time_proposal_to_arrival")
+            final_result["avg_stay_duration_hours"] = res.get("avg_stay_duration_hours")
+            # Ensure the agency_id from the result is used if available (though it should match the input)
+            # final_result["agency_id"] = res.get("agency_id", agency_id)
+
+        return final_result
     
     def get_profile_quality_by_agency(self, agency_id: str, time_period: str = "last_quarter") -> Dict[str, Any]:
         """
@@ -221,33 +235,25 @@ class BigQueryConnection:
         Returns:
             dict: Dictionary with profile quality information
         """
-        # Calculate date range based on time period
-        date_filter = self._get_date_filter(time_period)
+        date_field = "cp.created_at"
+        date_filter = self._get_date_filter(time_period, date_field)
         
         query = f"""
         WITH 
         profile_violations AS (
             SELECT 
                 cp.agency_id,
-                COUNT(DISTINCT cp.caregiver_id) AS total_caregivers,
-                COUNT(DISTINCT CASE WHEN pv.violation_type = 'experience' THEN cp.caregiver_id END) AS experience_violations,
-                COUNT(DISTINCT CASE WHEN pv.violation_type = 'language' THEN cp.caregiver_id END) AS language_violations,
-                COUNT(DISTINCT CASE WHEN pv.violation_type = 'smoker' THEN cp.caregiver_id END) AS smoker_violations,
-                COUNT(DISTINCT CASE WHEN pv.violation_type = 'age' THEN cp.caregiver_id END) AS age_violations,
-                COUNT(DISTINCT CASE WHEN pv.violation_type = 'drivers_license' THEN cp.caregiver_id END) AS license_violations
+                COUNT(DISTINCT cp._id) AS total_caregivers,
+                0 AS experience_violations,
+                0 AS language_violations,
+                0 AS smoker_violations,
+                0 AS age_violations,
+                0 AS license_violations
             FROM 
-                `{self.project_id}.{self.dataset}.caregiver_profiles` cp
-            LEFT JOIN 
-                `{self.project_id}.{self.dataset}.profile_violations` pv
-            ON 
-                cp.caregiver_id = pv.caregiver_id
+                `{self.project_id}.{self.dataset}.care_giver_instances` cp
             WHERE 
                 cp.agency_id = @agency_id
-                AND {date_filter}
-            GROUP BY 
-                cp.agency_id
         )
-        
         SELECT 
             pv.*,
             SAFE_DIVIDE(pv.experience_violations, pv.total_caregivers) AS experience_violation_rate,
@@ -260,69 +266,57 @@ class BigQueryConnection:
         """
         
         params = {"agency_id": agency_id}
-        
-        # Execute the query
         result = self.execute_query(query, params)
-        
-        # Return the first row if available, otherwise empty dict
         return result[0] if result else {}
     
     def get_all_agencies_kpis(self, time_period: str = "last_quarter") -> List[Dict[str, Any]]:
         """
-        Get KPIs for all agencies for comparison
-        
-        Args:
-            time_period (str): The time period for which to get the KPIs
-            
-        Returns:
-            list: List of dictionaries with KPI information for all agencies
+        Get KPIs for all agencies for comparison based on care_stays
         """
-        # Calculate date range based on time period
-        date_filter = self._get_date_filter(time_period)
+        date_field = "cs.created_at"
+        date_filter = self._get_date_filter(time_period, date_field)
         
         query = f"""
         WITH 
+        agency_care_stays AS (
+             SELECT 
+                 c.agency_id,
+                 a.name AS agency_name,
+                 cs._id AS care_stay_id,
+                 cs.stage
+             FROM 
+                 `{self.project_id}.{self.dataset}.care_stays` cs
+             JOIN 
+                 `{self.project_id}.{self.dataset}.contracts` c ON cs.contract_id = c._id
+             JOIN
+                 `{self.project_id}.{self.dataset}.agencies` a ON c.agency_id = a._id
+             WHERE 
+                 {date_filter}
+                 AND a.active = 'true'
+        ),
         agency_metrics AS (
             SELECT 
-                jp.agency_id,
-                a.agency_name,
-                COUNT(DISTINCT jp.job_id) AS total_jobs_viewed,
-                COUNT(DISTINCT CASE WHEN jp.status = 'reserved' THEN jp.job_id END) AS total_jobs_reserved,
-                COUNT(DISTINCT CASE WHEN jp.status = 'fulfilled' THEN jp.job_id END) AS total_jobs_fulfilled,
-                COUNT(DISTINCT CASE WHEN jp.status = 'cancelled_by_agency' THEN jp.job_id END) AS total_jobs_cancelled,
-                COUNT(DISTINCT CASE WHEN jp.status = 'pending' THEN jp.job_id END) AS total_jobs_pending,
-                COUNT(DISTINCT CASE WHEN jp.status = 'caregiver_assigned' THEN jp.job_id END) AS total_caregivers_assigned,
-                COUNT(DISTINCT CASE WHEN jp.status = 'caregiver_started' THEN jp.job_id END) AS total_caregivers_started,
-                COUNT(DISTINCT CASE WHEN jp.status = 'ended_early' THEN jp.job_id END) AS total_ended_early,
-                COUNT(DISTINCT CASE WHEN jp.status = 'completed' THEN jp.job_id END) AS total_completed
-            FROM 
-                `{self.project_id}.{self.dataset}.job_placements` jp
-            JOIN
-                `{self.project_id}.{self.dataset}.agencies` a
-            ON
-                jp.agency_id = a.agency_id
-            WHERE 
-                {date_filter}
-                AND a.status = 'active'
-            GROUP BY 
-                jp.agency_id, a.agency_name
+                agency_id,
+                agency_name,
+                COUNT(care_stay_id) AS total_proposals,
+                COUNTIF(stage = 'Bestätigt') AS total_started,
+                COUNTIF(stage = 'Bestätigt') AS total_completed,
+                COUNTIF(stage = 'Abgebrochen') AS total_ended_early,
+                COUNTIF(stage = 'Abgebrochen') AS total_cancelled
         )
-        
         SELECT 
             am.*,
-            SAFE_DIVIDE(am.total_jobs_reserved, am.total_jobs_viewed) AS reservation_rate,
-            SAFE_DIVIDE(am.total_jobs_fulfilled, am.total_jobs_reserved) AS fulfillment_rate,
-            SAFE_DIVIDE(am.total_jobs_cancelled, am.total_jobs_reserved) AS cancellation_rate,
-            SAFE_DIVIDE(am.total_caregivers_started, am.total_caregivers_assigned) AS start_rate,
-            SAFE_DIVIDE(am.total_completed, am.total_caregivers_started) AS completion_rate,
-            SAFE_DIVIDE(am.total_ended_early, am.total_caregivers_started) AS early_end_rate
+            0.0 AS reservation_rate,
+            0.0 AS fulfillment_rate,
+            0.0 AS cancellation_rate,
+            SAFE_DIVIDE(am.total_started, am.total_proposals) AS start_rate,
+            SAFE_DIVIDE(am.total_completed, am.total_started) AS completion_rate,
+            SAFE_DIVIDE(am.total_ended_early, am.total_started) AS early_end_rate
         FROM 
             agency_metrics am
         ORDER BY
             am.agency_name ASC
         """
-        
-        # Execute the query
         return self.execute_query(query)
     
     def get_cancellation_texts(self, agency_id: str, time_period: str = "last_quarter") -> List[str]:
@@ -445,27 +439,26 @@ class BigQueryConnection:
         
         return texts
     
-    def _get_date_filter(self, time_period: str) -> str:
+    def _get_date_filter(self, time_period: str, date_field_name: str = "created_at") -> str:
         """
-        Helper method to generate date filter SQL based on time period
-        
-        Args:
-            time_period (str): The time period (last_quarter, last_month, last_year, etc.)
-            
-        Returns:
-            str: SQL condition for date filtering
+        Helper method to generate date filter SQL based on time period and field name
         """
+        today = datetime.now().date()
         if time_period == "last_quarter":
-            return "date_field >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)"
+            start_date = today - timedelta(days=90)
+            return f"DATE({date_field_name}) >= '{start_date.isoformat()}'"
         elif time_period == "last_month":
-            return "date_field >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH)"
+            start_date = today - timedelta(days=30)
+            return f"DATE({date_field_name}) >= '{start_date.isoformat()}'"
         elif time_period == "last_year":
-            return "date_field >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 YEAR)"
+            start_date = today - timedelta(days=365)
+            return f"DATE({date_field_name}) >= '{start_date.isoformat()}'"
         elif time_period == "all_time":
             return "TRUE"  # No date filter
         else:
             # Default to last quarter
-            return "date_field >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)"
+            start_date = today - timedelta(days=90)
+            return f"DATE({date_field_name}) >= '{start_date.isoformat()}'"
     
     def get_avg_time_posting_to_reservation(self, agency_id: str, start_date: str, end_date: str) -> float:
         """

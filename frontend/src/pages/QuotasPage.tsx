@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../store/appStore';
-import apiService, { KPIData, ComparisonData } from '../services/api';
+import apiService from '../services/api';
 import Loading from '../components/common/Loading';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -20,7 +20,7 @@ interface ScatterDataPoint {
 const QuotasPage: React.FC = () => {
   const { selectedAgency, timePeriod } = useAppStore();
   
-  const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
+  const [comparisonData, setComparisonData] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -32,7 +32,7 @@ const QuotasPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
         
-        const data = await apiService.compareAgencyKPIs(selectedAgency.agency_id, timePeriod);
+        const data = await apiService.compareAgencyReactionTimes(selectedAgency.agency_id, timePeriod);
         setComparisonData(data);
       } catch (err) {
         console.error('Error fetching KPI comparison data:', err);
@@ -65,7 +65,7 @@ const QuotasPage: React.FC = () => {
   }
   
   // Prepare data for scatter plot
-  const scatterData: ScatterDataPoint[] = comparisonData.all_agencies.map(agency => ({
+  const scatterData: ScatterDataPoint[] = comparisonData.all_agencies.map((agency: any) => ({
     x: agency.reservation_rate * 100 || 0,  // Convert to percentage
     y: agency.fulfillment_rate * 100 || 0,  // Convert to percentage
     z: agency.total_jobs_reserved || 0,

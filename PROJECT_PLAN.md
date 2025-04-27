@@ -1,113 +1,123 @@
-# Projektplan: Agentur-Dashboard (Autonomes KI-Projekt)
+# PROJECT INSTRUCTIONS — MVP AGENTUR‑REPORT (DUE IN 2 WEEKS)
 
-## Übersicht
+> **Audience:** OpenAI o3 agent in Cursor
+> **Repo:** `agentur-report/`
+> **Commit prefix for this phase:** `mvp/`
 
-Dieses Dokument definiert den vollständigen Entwicklungsprozess für ein datenbasiertes Analyse-Dashboard zur Bewertung und zum Vergleich von 45 Partneragenturen. Das System wird quartalsweise vom Geschäftsführer genutzt, um in Gesprächen mit jeder einzelnen Agentur deren Leistungen zu analysieren, vergleichen und bewerten.
+---
 
-### Technologie-Stack
-- **Frontend**: React + TypeScript + TailwindCSS
-- **Datenvisualisierung**: Recharts (primär) + ECharts (für komplexere Visualisierungen)
-- **Backend/API**: FastAPI (Python-basiert)
-- **Datenanbindung**: Google BigQuery mit Python-Client
-- **LLM-Modul**: OpenAI GPT via API + Prompt-basiertes Mapping
-- **Deployment**: Docker + Cloud Run 
-- **Export**: PDF-Export via html2pdf.js
+## 1 — PURPOSE
+Create a *click‑ready* MVP that delivers the key performance & problem metrics for our Polish partner agencies in a form my CEO can grasp in minutes, while laying the groundwork for future XORA integration.
 
-## Phase 1 – Initialisierung und Projektaufbau
-- [x] PROJECT_PLAN.md erstellen
-- [x] Verzeichnisstruktur anlegen
-- [x] Package.json und Abhängigkeiten für Frontend
-- [x] requirements.txt für Backend
-- [x] .gitignore-Datei erstellen
-- [x] README.md mit grundlegender Projektdokumentation anlegen
-- [x] BigQuery-Zugangskonfiguration erstellen
+---
 
-## Phase 2 – Backend-Entwicklung (FastAPI)
-- [x] Verzeichnisstruktur für Backend anlegen
-- [x] FastAPI-Grundgerüst einrichten
-- [x] BigQuery-Verbindungsmodul entwickeln
-- [x] Datenmodelle definieren
-- [x] API-Endpunkte für Agenturliste implementieren
-- [x] API-Endpunkte für KPI-Abfragen implementieren
-- [x] API-Endpunkte für Reaktionszeiten implementieren
-- [x] API-Endpunkte für Profilqualität implementieren
-- [x] API-Endpunkte für LLM-Analysen (Vorbereitung) implementieren
-- [x] API-Dokumentation mit Swagger/OpenAPI aktivieren
-- [x] Error-Handling und Logging einrichten
-- [x] Tests für Backend-Endpunkte schreiben
+## 2 — CONTEXT SNAPSHOT
+| Area | Current State |
+|------|--------------|
+| **Data** | 32+ parametrised SQL queries hitting BigQuery; raw JSON payloads via internal Node/Express API. |
+| **Domain** | Senior‑care staffing. 79 current clients; we track agency quality & failure modes. |
+| **Analysis Depth** | Need at least Level‑2 metrics (e.g. deployment aborts split <3 d / 3‑7 d / >7 d). Level‑3 (root‑cause via LLM) is *out of scope* for MVP. |
+| **Target Stack** | Node/Express API · BigQuery · Looker Studio or lightweight React dashboard · PDF/CSV export. |
+| **Future** | XORA MCP, Unstructured Workflow Endpoint, LightRAG, Gemini 2.5 Pro. |
 
-## Phase 3 – Frontend-Grundlagen (React)
-- [x] Create-React-App mit TypeScript initialisieren
-- [x] TailwindCSS einrichten
-- [x] Grundlegende Verzeichnisstruktur erstellen
-- [x] Router-Setup mit React Router
-- [x] Redux/Context für globalen Zustand konfigurieren
-- [x] API-Service-Modul für Backend-Kommunikation entwickeln
-- [x] Layout-Komponenten (Header, Footer, Navigation) erstellen
-- [x] Agentur-Auswahl-Dropdown implementieren
-- [x] Reiter-System einrichten
+---
 
-## Phase 4 – Dashboard-Module und Visualisierungen
-- [x] Reiter 1: Quoten-Analyse
-  - [x] Scatterplot für Agenturvergleich
-  - [x] KPI-Karten für wichtigste Metriken
-  - [x] Vergleichstabelle für alle KPIs
-- [x] Reiter 2: Reaktionszeiten
-  - [x] Zeitverlauf-Diagramme (Linien)
-  - [x] Vergleichsvisualisierung mit Durchschnitt
-  - [x] Top/Flop-Listen
-- [x] Reiter 3: Qualität
-  - [x] Profilqualitäts-Übersicht
-  - [x] Regelverstöße-Visualisierung
-  - [x] Heatmap für Problembereiche
-- [x] Reiter 4: Stärken- und Schwächenanalyse
-  - [x] Radar-Chart für Stärken/Schwächen
-  - [x] Automatische Schwächen-Markierung
-  - [x] Detailansicht für einzelne Schwächen
+## 3 — HIGH‑LEVEL DELIVERABLES (D‑14 ➜ D‑0)
+1. **Metric Views** – Three SQL views `vw_abort_t1|t2|t3` + consolidated `vw_abort_all`.
+2. **Reporting API** – REST route `GET /v1/reporting/agency/{id}?from=&to=` returns JSON & optional PDF/CSV.
+3. **Dashboard** – Minimal Looker or React page listing agencies with traffic‑light KPI tiles & drill‑down table.
+4. **CI Checks** – ESLint + Jest for API, dbt‑style tests for SQL views.
+5. **Docs** – Swagger/OpenAPI spec, README quick‑start.
 
-## Phase 5 – LLM-Integration
-- [x] LLM-Modul für Textanalyse aufsetzen
-- [x] Prompt-Templates für verschiedene Analysen definieren
-- [x] Grund-Kategorien für Abbrüche definieren (10-20 Kategorien)
-- [x] Schnittstelle für E-Mail/Ticket-Analyse entwickeln
-- [x] Ergebnisse in Datenbank zwischenspeichern
-- [x] Visualisierung der LLM-Analysen im Dashboard integrieren
+> *Stretch:* PoC folder `ingestion/` with `workflow.json` for Unstructured ingest of 50 E‑mails to Chroma.
 
-## Phase 6 – Export-Funktionalität
-- [x] PDF-Export-Modul mit html2pdf einrichten
-- [x] Anpassung der Komponenten für Print-Layout
-- [x] Export-Button und Funktionalität einbauen
-- [x] Styling für exportierte PDFs optimieren
+---
 
-## Phase 7 – Integration und Testing
-- [x] Frontend-Backend-Integration vervollständigen
-- [x] End-to-End-Tests für Hauptfunktionen
-- [x] Leistungsoptimierung für große Datenmengen
-- [x] Cross-Browser-Kompatibilität sicherstellen
-- [x] Responsives Design für verschiedene Bildschirmgrößen
+## 4 — ACCEPTANCE CRITERIA
+- Dashboard opens with ≤1 s TTFB (cached payload).
+- CEO can export full PDF of all agencies ≤2 clicks.
+- Metrics include *at least*:
+  - Total deployments
+  - Abort counts & % (split into the 3 time buckets)
+  - Average response time to urgent replacements (hrs)
+  - Current active placements
+  - Churn rate (rolling 30 d)
+- Code passes all lint/tests (`npm run ci`).
 
-## Phase 8 – Deployment und Abschluss
-- [x] Docker-Container für Backend erstellen
-- [x] Build-Prozess für Frontend optimieren
-- [x] Deployment-Konfiguration für Cloud Run
-- [x] Umfassende Dokumentation erstellen
-- [x] Finale Tests im produktionsnahen Umfeld
-- [x] Projekt abschließen und übergeben
+---
 
-## Fortschrittsüberwachung
-Nach jedem Schritt wird eine Selbstkontrolle durchgeführt:
-- Wurde alles Spezifizierte vollständig umgesetzt?
-- Gibt es logische oder technische Lücken im Design?
-- Gibt es offene Tasks oder unerledigte Abhängigkeiten?
+## 5 — ARCHITECTURE & DIRECTORY LAYOUT
+```
+agentur-report/
+  ├─ api/
+  │   ├─ routes/
+  │   ├─ controllers/
+  │   └─ index.ts
+  ├─ sql/
+  │   ├─ views/
+  │   └─ seeds/
+  ├─ dashboard/
+  │   ├─ src/
+  │   └─ build/
+  ├─ ingestion/          # ← stretch goal
+  ├─ docs/
+  └─ tests/
+```
 
-## Status
-- Aktuelle Phase: Projekt abgeschlossen
-- Fortschritt: 
-  - Phase 1: 7/7 Tasks abgeschlossen
-  - Phase 2: 12/12 Tasks abgeschlossen
-  - Phase 3: 9/9 Tasks abgeschlossen 
-  - Phase 4: 12/12 Tasks abgeschlossen
-  - Phase 5: 6/6 Tasks abgeschlossen
-  - Phase 6: 4/4 Tasks abgeschlossen
-  - Phase 7: 5/5 Tasks abgeschlossen
-  - Phase 8: 6/6 Tasks abgeschlossen 
+---
+
+## 6 — TASK BOARD (K = Kanban Column)
+| ID | Task | Owner | Est h | K |
+|----|------|-------|-------|---|
+| T‑01 | Create SQL views for abort buckets | o3 AI | 4 | Backlog |
+| T‑02 | Build `/v1/reporting/agency/:id` route | o3 AI | 6 | Backlog |
+| T‑03 | Write Swagger spec | o3 AI | 2 | Backlog |
+| T‑04 | Jest tests for controllers | o3 AI | 3 | Backlog |
+| T‑05 | React dashboard scaffold | o3 AI | 5 | Backlog |
+| T‑06 | PDF/CSV exporter util | o3 AI | 2 | Backlog |
+| T‑07 | Docker compose for local dev | o3 AI | 2 | Backlog |
+| T‑08 | README + quick‑start docs | o3 AI | 1 | Backlog |
+| T‑09 | PoC `workflow.json` (stretch) | o3 AI | 4 | Backlog |
+
+> **Rule:** After each task, open PR referencing the ID and include `mvp/<task>` branch.
+
+---
+
+## 7 — CODING STANDARDS
+- TypeScript strict mode, Node 18.
+- Prettier, 2‑space indent.
+- Env vars via `.env.sample` → no secrets committed.
+- SQL formatted with `sql‑formatter` (`npm run format:sql`).
+
+---
+
+## 8 — TIMELINE & MILESTONES
+| Day | Goal |
+|-----|------|
+| D‑14 (Today) | Project setup, directory scaffold, README stub. |
+| D‑10 | SQL views + unit tests done; sample JSON result visible. |
+| D‑7  | API endpoint & Swagger live; Postman collection committed. |
+| D‑4  | Dashboard MVP (table + KPI tiles) deployable locally. |
+| D‑2  | Export to PDF/CSV implemented; end‑to‑end smoke test green. |
+| D‑0  | CEO demo; tag `v0.1.0`. |
+
+---
+
+## 9 — COLLAB RULES FOR o3 AGENT
+1. Ask clarifying questions **only** via TODO comments if spec gap blocks progress.
+2. Prefer small iterative commits over monolith PRs.
+3. Keep all hard‑coded IDs or sample data under `sql/seeds/`.
+4. When unsure, implement **interfaces** first – e.g. `IRetriever` for future LightRAG.
+
+---
+
+## 10 — FUTURE BACKLOG (POST‑MVP)
+- Level‑3 root‑cause analysis using Gemini 2.5 Pro + Unstructured ingest.
+- Nightly vector refresh cron via MCP.
+- Graph‑augmented retrieval with LightRAG.
+- Role‑based access control & SSO.
+
+---
+
+**End of Instructions**
+

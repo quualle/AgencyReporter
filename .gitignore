@@ -91,7 +91,7 @@ data/*.json
 data/*.xlsx
 data/*.db
 *.sqlite
-*.sqlite3
+*.sqlite3 
 
 # Environment variables and sensitive information
 .env

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../store/appStore';
-import apiService, { ResponseTimeData, ComparisonData } from '../services/api';
+import apiService from '../services/api';
 import Loading from '../components/common/Loading';
 import ErrorMessage from '../components/common/ErrorMessage';
 import ExportButton from '../components/common/ExportButton';
@@ -20,6 +20,7 @@ import {
   ZAxis,
   Cell,
 } from 'recharts';
+import ComparisonScale from '../components/common/ComparisonScale';
 
 interface TopAgency {
   agency_id: string;
@@ -27,54 +28,103 @@ interface TopAgency {
   value: number;
 }
 
+// Interface für die gebucketen Abbruchdaten
+interface CancellationBucketData {
+  lt_3_days: { count: number; ratio: string };
+  btw_3_7_days: { count: number; ratio: string };
+  btw_8_14_days: { count: number; ratio: string };
+  btw_15_30_days: { count: number; ratio: string };
+  total: number;
+}
+
 const ResponseTimesPage: React.FC = () => {
   const { selectedAgency, timePeriod } = useAppStore();
   
-  const [responseTimeData, setResponseTimeData] = useState<ResponseTimeData | null>(null);
-  const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
-  const [topAgencies, setTopAgencies] = useState<TopAgency[]>([]);
-  const [flopAgencies, setFlopAgencies] = useState<TopAgency[]>([]);
+  // State für individuelle Daten
+  const [postingResStats, setPostingResStats] = useState<any>(null);
+  const [resPropStats, setResPropStats] = useState<any>(null);
+  const [propCancelStats, setPropCancelStats] = useState<any>(null);
+  const [arrivalCancelStats, setArrivalCancelStats] = useState<any>(null);
+  
+  // State für Durchschnittsdaten
+  const [avgPostingResStats, setAvgPostingResStats] = useState<any>(null);
+  const [avgResPropStats, setAvgResPropStats] = useState<any>(null);
+  const [avgPropCancelStats, setAvgPropCancelStats] = useState<any>(null);
+  const [avgArrivalCancelStats, setAvgArrivalCancelStats] = useState<any>(null);
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!selectedAgency) return;
+      if (!selectedAgency) {
+         // Nur Durchschnitt laden, wenn keine Agentur gewählt ist?
+         try {
+             setIsLoading(true);
+             setError(null);
+             const [
+                 avgPostingRes,
+                 avgResProp,
+                 avgPropCancel,
+                 avgArrivalCancel
+             ] = await Promise.all([
+                 apiService.getOverallPostingToReservationStats(timePeriod),
+                 apiService.getOverallReservationToFirstProposalStats(timePeriod),
+                 apiService.getOverallProposalToCancellationStats(timePeriod),
+                 apiService.getOverallArrivalToCancellationStats(timePeriod)
+             ]);
+             setAvgPostingResStats(avgPostingRes);
+             setAvgResPropStats(avgResProp);
+             setAvgPropCancelStats(avgPropCancel);
+             setAvgArrivalCancelStats(avgArrivalCancel);
+         } catch (err) {
+             console.error('Error fetching overall reaction times data:', err);
+             setError('Fehler beim Laden der Durchschnitts-Reaktionszeiten.');
+         } finally {
+             setIsLoading(false);
+         }
+         return;
+      }
       
+      // Individuelle UND Durchschnittsdaten laden
       try {
         setIsLoading(true);
         setError(null);
         
-        // Fetch data in parallel
-        const [responseTimeResponse, comparisonResponse] = await Promise.all([
-          apiService.getAgencyResponseTimes(selectedAgency.agency_id, timePeriod),
-          apiService.compareAgencyResponseTimes(selectedAgency.agency_id, timePeriod)
+        const [ 
+          postingRes,
+          resProp,
+          propCancel,
+          arrivalCancel,
+          avgPostingRes,
+          avgResProp,
+          avgPropCancel,
+          avgArrivalCancel
+        ] = await Promise.all([
+          // Individuelle Daten
+          apiService.getPostingToReservationStats(selectedAgency.agency_id, timePeriod),
+          apiService.getReservationToFirstProposalStats(selectedAgency.agency_id, timePeriod),
+          apiService.getProposalToCancellationStats(selectedAgency.agency_id, timePeriod),
+          apiService.getArrivalToCancellationStats(selectedAgency.agency_id, timePeriod),
+          // Durchschnittsdaten
+          apiService.getOverallPostingToReservationStats(timePeriod),
+          apiService.getOverallReservationToFirstProposalStats(timePeriod),
+          apiService.getOverallProposalToCancellationStats(timePeriod),
+          apiService.getOverallArrivalToCancellationStats(timePeriod)
         ]);
         
-        setResponseTimeData(responseTimeResponse);
-        setComparisonData(comparisonResponse);
-        
-        // Extract top and flop agencies for avg_time_to_reservation
-        if (comparisonResponse && comparisonResponse.all_agencies) {
-          const sortedAgencies = [...comparisonResponse.all_agencies].sort(
-            (a, b) => a.avg_time_to_reservation - b.avg_time_to_reservation
-          );
-          
-          setTopAgencies(sortedAgencies.slice(0, 5).map(agency => ({
-            agency_id: agency.agency_id,
-            agency_name: agency.agency_name,
-            value: agency.avg_time_to_reservation
-          })));
-          
-          setFlopAgencies(sortedAgencies.slice(-5).reverse().map(agency => ({
-            agency_id: agency.agency_id,
-            agency_name: agency.agency_name,
-            value: agency.avg_time_to_reservation
-          })));
-        }
+        setPostingResStats(postingRes);
+        setResPropStats(resProp);
+        setPropCancelStats(propCancel);
+        setArrivalCancelStats(arrivalCancel);
+        setAvgPostingResStats(avgPostingRes);
+        setAvgResPropStats(avgResProp);
+        setAvgPropCancelStats(avgPropCancel);
+        setAvgArrivalCancelStats(avgArrivalCancel);
+
       } catch (err) {
         console.error('Error fetching response times data:', err);
-        setError('Fehler beim Laden der Reaktionszeiten-Daten. Bitte versuchen Sie es später erneut.');
+        setError('Fehler beim Laden der Reaktionszeiten-Daten.');
       } finally {
         setIsLoading(false);
       }
@@ -83,38 +133,30 @@ const ResponseTimesPage: React.FC = () => {
     fetchData();
   }, [selectedAgency, timePeriod]);
 
-  const formatHours = (value: number) => {
-    if (value >= 24) {
-      return `${(value / 24).toFixed(1)} Tage`;
+  const formatHours = (value: string | number | null | undefined) => {
+    if (value === null || value === undefined) return 'N/A';
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return 'N/A';
+
+    if (numValue >= 24) {
+      return `${(numValue / 24).toFixed(1)} Tage`;
     }
-    return `${value.toFixed(1)} Std.`;
+    return `${numValue.toFixed(1)} Std.`;
   };
-
-  const getComparisonData = () => {
-    if (!comparisonData || !responseTimeData) return [];
-
-    // Transform data for scatter plot
-    return comparisonData.all_agencies.map(agency => ({
-      agency_id: agency.agency_id,
-      agency_name: agency.agency_name,
-      x: agency.avg_time_to_reservation || 0,
-      y: agency.avg_time_to_proposal || 0,
-      z: agency.agency_id === selectedAgency?.agency_id ? 10 : 5,
-      isSelected: agency.agency_id === selectedAgency?.agency_id
-    }));
-  };
-
-  const getTimelineData = () => {
-    if (!comparisonData || !responseTimeData) return [];
-
-    // Simulate historical data for line chart (normally would come from API)
+  
+  const industryAverage = avgResPropStats?.industry_average || {};
+  
+  // Daten für Abbruch-Bucket-Chart aufbereiten
+  const getCancellationChartData = () => {
+    if (!arrivalCancelStats?.overall) return [];
+    const overall = arrivalCancelStats.overall;
+    const total = overall.abgebrochen_vor_arrival || 1; // Vermeide Division durch Null
+    
     return [
-      { month: 'Jan', selected: 45, average: 52 },
-      { month: 'Feb', selected: 48, average: 50 },
-      { month: 'Mar', selected: 40, average: 48 },
-      { month: 'Apr', selected: 38, average: 45 },
-      { month: 'Mai', selected: 35, average: 42 },
-      { month: 'Jun', selected: responseTimeData.avg_time_to_reservation || 36, average: 40 }
+      { name: '< 3 Tage', value: (overall.lt_3_days?.count / total) * 100 || 0, count: overall.lt_3_days?.count || 0 },
+      { name: '3-7 Tage', value: (overall.btw_3_7_days?.count / total) * 100 || 0, count: overall.btw_3_7_days?.count || 0 },
+      { name: '8-14 Tage', value: (overall.btw_8_14_days?.count / total) * 100 || 0, count: overall.btw_8_14_days?.count || 0 },
+      { name: '15-30 Tage', value: (overall.btw_15_30_days?.count / total) * 100 || 0, count: overall.btw_15_30_days?.count || 0 }
     ];
   };
 
@@ -143,7 +185,7 @@ const ResponseTimesPage: React.FC = () => {
             Reaktionszeiten: {selectedAgency.agency_name}
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
-            Analyse der Reaktionszeiten in verschiedenen Phasen des Vermittlungsprozesses
+            Detaillierte Analyse der Reaktionszeiten und Abbruch-Timings
           </p>
         </div>
         <ExportButton 
@@ -154,274 +196,115 @@ const ResponseTimesPage: React.FC = () => {
       </div>
 
       <div id="response-times-content" className="print-container">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* KPI Cards */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Reaktionszeiten-Übersicht</h2>
-            
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 dark:text-gray-300">Ausschreibung → Reservierung:</span>
-                <span className="font-medium text-gray-800 dark:text-white">
-                  {responseTimeData?.avg_time_to_reservation ? formatHours(responseTimeData.avg_time_to_reservation) : 'N/A'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 dark:text-gray-300">Reservierung → Personalvorschlag:</span>
-                <span className="font-medium text-gray-800 dark:text-white">
-                  {responseTimeData?.avg_time_to_proposal ? formatHours(responseTimeData.avg_time_to_proposal) : 'N/A'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 dark:text-gray-300">Personalvorschlag → Abbruch:</span>
-                <span className="font-medium text-gray-800 dark:text-white">
-                  {responseTimeData?.avg_time_to_cancellation ? formatHours(responseTimeData.avg_time_to_cancellation) : 'N/A'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 dark:text-gray-300">Abbruch → geplanter Anreisetermin:</span>
-                <span className="font-medium text-gray-800 dark:text-white">
-                  {responseTimeData?.avg_time_before_start ? formatHours(responseTimeData.avg_time_before_start) : 'N/A'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 dark:text-gray-300">Zeit bis Abbrüche:</span>
-                <span className="font-medium text-gray-800 dark:text-white">
-                  {responseTimeData?.avg_time_to_any_cancellation ? formatHours(responseTimeData.avg_time_to_any_cancellation) : 'N/A'}
-                </span>
-              </div>
-            </div>
-            
-            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <h3 className="text-md font-semibold mb-2 text-gray-800 dark:text-white">Vergleich zum Branchendurchschnitt</h3>
-              {comparisonData && (
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 dark:text-gray-300">Ausschreibung → Reservierung:</span>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm font-medium text-gray-800 dark:text-white">
-                        {formatHours(responseTimeData?.avg_time_to_reservation || 0)}
-                      </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        vs. {formatHours(comparisonData.industry_average.avg_time_to_reservation || 0)}
-                      </span>
-                      <span className={`text-xs ${
-                        (responseTimeData?.avg_time_to_reservation || 0) < (comparisonData.industry_average.avg_time_to_reservation || 0) 
-                          ? 'text-green-500' 
-                          : 'text-red-500'
-                      }`}>
-                        {(responseTimeData?.avg_time_to_reservation || 0) < (comparisonData.industry_average.avg_time_to_reservation || 0) 
-                          ? '✓' 
-                          : '✗'}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 dark:text-gray-300">Reservierung → Personalvorschlag:</span>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm font-medium text-gray-800 dark:text-white">
-                        {formatHours(responseTimeData?.avg_time_to_proposal || 0)}
-                      </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        vs. {formatHours(comparisonData.industry_average.avg_time_to_proposal || 0)}
-                      </span>
-                      <span className={`text-xs ${
-                        (responseTimeData?.avg_time_to_proposal || 0) < (comparisonData.industry_average.avg_time_to_proposal || 0) 
-                          ? 'text-green-500' 
-                          : 'text-red-500'
-                      }`}>
-                        {(responseTimeData?.avg_time_to_proposal || 0) < (comparisonData.industry_average.avg_time_to_proposal || 0) 
-                          ? '✓' 
-                          : '✗'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+        {/* Abschnitt 1: Kern-Reaktionszeiten mit ComparisonScale */}
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Kern-Reaktionszeiten (Median)</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <ComparisonScale 
+              label="Posting → Reservierung"
+              agencyName={selectedAgency?.agency_name}
+              agencyValue={postingResStats?.median_hours}
+              averageValue={avgPostingResStats?.median_hours} 
+              formatValue={formatHours}
+              evaluationType='neutral'
+              tooltip="Medianzeit von Veröffentlichung der Stelle bis zur Reservierung durch die Agentur."
+            />
+            <ComparisonScale 
+              label="Reservierung → Erster Vorschlag"
+              agencyName={selectedAgency?.agency_name}
+              agencyValue={resPropStats?.median_hours}
+              averageValue={avgResPropStats?.median_hours}
+              formatValue={formatHours}
+              evaluationType='neutral'
+              tooltip="Medianzeit von Reservierung bis zum ersten Personalvorschlag (CareStay)."
+            />
+            <ComparisonScale 
+              label="Vorschlag → Abbruch (vor Anreise)"
+              agencyName={selectedAgency?.agency_name}
+              agencyValue={propCancelStats?.median_hours}
+              averageValue={avgPropCancelStats?.median_hours}
+              formatValue={formatHours}
+              evaluationType='neutral'
+              tooltip="Medianzeit von Personalvorschlag bis zum Abbruch durch die Agentur (vor geplanter Anreise)."
+            />
+            <ComparisonScale 
+              label="Abbruch vor Anreise (Ersteinsatz)"
+              agencyName={selectedAgency?.agency_name}
+              agencyValue={arrivalCancelStats?.first_stays?.median_hours}
+              averageValue={avgArrivalCancelStats?.first_stays?.median_hours}
+              formatValue={formatHours}
+              evaluationType='lowerIsBetter'
+              tooltip="Medianzeit zwischen geplantem Anreisedatum und Abbruch (nur Ersteinsätze). Niedriger ist schlechter."
+            />
           </div>
+        </section>
 
-          {/* Time Trend Chart */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Zeitverlauf: Reaktionszeiten</h2>
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={getTimelineData()} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ccc" />
-                  <XAxis dataKey="month" />
-                  <YAxis label={{ value: 'Stunden', angle: -90, position: 'insideLeft' }} />
-                  <Tooltip
-                    formatter={(value: number) => [formatHours(value), 'Reaktionszeit']}
-                    labelFormatter={(label) => `Monat: ${label}`}
-                  />
-                  <Legend />
-                  <Line 
-                    type="monotone" 
-                    dataKey="selected" 
-                    name={selectedAgency.agency_name} 
-                    stroke="#4f46e5" 
-                    strokeWidth={2} 
-                    dot={{ r: 4 }} 
-                    activeDot={{ r: 6 }} 
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="average" 
-                    name="Branchendurchschnitt" 
-                    stroke="#9ca3af" 
-                    strokeWidth={2} 
-                    dot={{ r: 4 }} 
-                    strokeDasharray="4 4" 
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-
-        {/* Scatter Plot for Comparison */}
-        <div className="mb-8 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Agenturvergleich: Reaktionszeiten</h2>
+        {/* Abschnitt 2: Abbruch-Timing (vor Anreise) */}
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Abbruch-Timing (vor Anreise)</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="dashboard-card">
+              <h3 className="text-lg font-semibold mb-2">Verteilung der Abbruch-Zeitpunkte</h3>
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-            Vergleich der Reaktionszeiten aller Agenturen. Die X-Achse zeigt die Zeit von Ausschreibung bis Reservierung, 
-            die Y-Achse die Zeit von Reservierung bis Personalvorschlag.
-          </p>
-          
-          <div className="h-96">
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ccc" />
-                <XAxis 
-                  type="number" 
-                  dataKey="x" 
-                  name="Zeit bis Reservierung" 
-                  label={{ value: 'Stunden bis Reservierung', position: 'bottom', offset: 0 }}
-                  tickFormatter={formatHours}
-                />
-                <YAxis 
-                  type="number" 
-                  dataKey="y" 
-                  name="Zeit bis Personalvorschlag" 
-                  label={{ value: 'Stunden bis Personalvorschlag', angle: -90, position: 'left' }}
-                  tickFormatter={formatHours}
-                />
-                <ZAxis type="number" dataKey="z" range={[40, 100]} name="Größe" />
-                <Tooltip 
-                  cursor={{ strokeDasharray: '3 3' }}
-                  formatter={(value: number, name: string) => [formatHours(value), name]}
-                  labelFormatter={(label) => ''}
-                  content={(props) => {
-                    if (props.active && props.payload && props.payload.length) {
-                      const data = props.payload[0].payload;
-                      return (
-                        <div className="bg-white dark:bg-gray-800 p-2 border border-gray-200 dark:border-gray-700 shadow-sm rounded">
-                          <p className="font-medium">{data.agency_name}</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Zeit bis Reservierung: {formatHours(data.x)}
-                          </p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Zeit bis Personalvorschlag: {formatHours(data.y)}
-                          </p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Scatter name="Agenturen" data={getComparisonData()}>
-                  {getComparisonData().map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={entry.isSelected ? '#4f46e5' : '#9ca3af'} 
-                    />
-                  ))}
-                </Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Top/Flop Lists */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Top 5 */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Top 5 - Schnellste Reaktionszeiten</h2>
+                Prozentuale Verteilung, wie viele Tage vor geplanter Anreise die Agentur einen Einsatz abbricht. 
+                (Basierend auf {arrivalCancelStats?.overall?.abgebrochen_vor_arrival || 0} Fällen)
+              </p>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  layout="vertical"
-                  data={topAgencies}
-                  margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ccc" horizontal={false} />
-                  <XAxis type="number" tickFormatter={formatHours} />
-                  <YAxis 
-                    type="category" 
-                    dataKey="agency_name" 
-                    tick={{ fontSize: 12 }}
-                    width={100}
-                  />
-                  <Tooltip 
-                    formatter={(value: number) => [formatHours(value), 'Reaktionszeit']}
-                    labelFormatter={(label) => `Agentur: ${label}`}
-                  />
-                  <Bar 
-                    dataKey="value" 
-                    fill="#10b981" 
-                    name="Reaktionszeit"
-                  >
-                    {topAgencies.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={entry.agency_id === selectedAgency?.agency_id ? '#4f46e5' : '#10b981'} 
-                      />
-                    ))}
-                  </Bar>
+                  <BarChart data={getCancellationChartData()} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" unit="%" domain={[0, 100]}/>
+                    <YAxis type="category" dataKey="name" width={80}/>
+                    <Tooltip formatter={(value: number, name, props) => [`${value.toFixed(1)}% (${props.payload.count} Fälle)`, "Anteil"]}/>
+                    <Bar dataKey="value" fill="#ef4444" name="Anteil" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
-
-          {/* Flop 5 */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Flop 5 - Langsamste Reaktionszeiten</h2>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  layout="vertical"
-                  data={flopAgencies}
-                  margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ccc" horizontal={false} />
-                  <XAxis type="number" tickFormatter={formatHours} />
-                  <YAxis 
-                    type="category" 
-                    dataKey="agency_name" 
-                    tick={{ fontSize: 12 }}
-                    width={100}
-                  />
-                  <Tooltip 
-                    formatter={(value: number) => [formatHours(value), 'Reaktionszeit']}
-                    labelFormatter={(label) => `Agentur: ${label}`}
-                  />
-                  <Bar 
-                    dataKey="value" 
-                    fill="#ef4444" 
-                    name="Reaktionszeit"
-                  >
-                    {flopAgencies.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={entry.agency_id === selectedAgency?.agency_id ? '#4f46e5' : '#ef4444'} 
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="dashboard-card">
+              <h3 className="text-lg font-semibold mb-2">Abbruch-Details</h3>
+              <table className="data-table w-full">
+                <thead>
+                  <tr><th>Zeitraum vor Anreise</th><th>Anzahl</th><th>Anteil</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>&lt; 3 Tage</td><td>{arrivalCancelStats?.overall?.lt_3_days?.count || 0}</td><td>{arrivalCancelStats?.overall?.lt_3_days?.ratio || '0.0%'}</td></tr>
+                  <tr><td>3-7 Tage</td><td>{arrivalCancelStats?.overall?.btw_3_7_days?.count || 0}</td><td>{arrivalCancelStats?.overall?.btw_3_7_days?.ratio || '0.0%'}</td></tr>
+                  <tr><td>8-14 Tage</td><td>{arrivalCancelStats?.overall?.btw_8_14_days?.count || 0}</td><td>{arrivalCancelStats?.overall?.btw_8_14_days?.ratio || '0.0%'}</td></tr>
+                  <tr><td>15-30 Tage</td><td>{arrivalCancelStats?.overall?.btw_15_30_days?.count || 0}</td><td>{arrivalCancelStats?.overall?.btw_15_30_days?.ratio || '0.0%'}</td></tr>
+                  <tr><td>**Gesamt**</td><td>**{arrivalCancelStats?.overall?.abgebrochen_vor_arrival || 0}**</td><td>**100.0%**</td></tr>
+                </tbody>
+              </table>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Hinweis: Der Durchschnittsvergleich ist für die Bucket-Verteilung noch nicht verfügbar.
+              </p>
             </div>
           </div>
-        </div>
+        </section>
+
+        {/* Abschnitt 3: Detaillierte Statistiken */}
+        <section>
+           <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Detaillierte Statistiken (Median / Durchschnitt)</h2>
+           <div className="overflow-x-auto">
+             <table className="data-table w-full">
+                <thead>
+                  <tr>
+                    <th>Metrik</th>
+                    <th>Agentur (Median)</th><th>Agentur (Schnitt)</th>
+                    <th>Durchschnitt (Median)</th><th>Durchschnitt (Schnitt)</th>
+                 </tr>
+                </thead>
+                 <tbody>
+                  <tr><td>Posting → Reservierung</td><td>{formatHours(postingResStats?.median_hours)}</td><td>{formatHours(postingResStats?.avg_hours)}</td><td>{formatHours(avgPostingResStats?.median_hours)}</td><td>{formatHours(avgPostingResStats?.avg_hours)}</td></tr>
+                  <tr><td>Reservierung → Erster Vorschlag</td><td>{formatHours(resPropStats?.median_hours)}</td><td>{formatHours(resPropStats?.avg_hours)}</td><td>{formatHours(avgResPropStats?.median_hours)}</td><td>{formatHours(avgResPropStats?.avg_hours)}</td></tr>
+                  <tr><td>Vorschlag → Abbruch (vor Anreise)</td><td>{formatHours(propCancelStats?.median_hours)}</td><td>{formatHours(propCancelStats?.avg_hours)}</td><td>{formatHours(avgPropCancelStats?.median_hours)}</td><td>{formatHours(avgPropCancelStats?.avg_hours)}</td></tr>
+                  <tr><td>Abbruch vor Anreise (Gesamt)</td><td>{formatHours(arrivalCancelStats?.overall?.median_hours)}</td><td>{formatHours(arrivalCancelStats?.overall?.avg_hours)}</td><td>{formatHours(avgArrivalCancelStats?.overall?.median_hours)}</td><td>{formatHours(avgArrivalCancelStats?.overall?.avg_hours)}</td></tr>
+                  <tr><td>Abbruch vor Anreise (Ersteinsatz)</td><td>{formatHours(arrivalCancelStats?.first_stays?.median_hours)}</td><td>{formatHours(arrivalCancelStats?.first_stays?.avg_hours)}</td><td>{formatHours(avgArrivalCancelStats?.first_stays?.median_hours)}</td><td>{formatHours(avgArrivalCancelStats?.first_stays?.avg_hours)}</td></tr>
+                  <tr><td>Abbruch vor Anreise (Folgeeinsatz)</td><td>{formatHours(arrivalCancelStats?.followup_stays?.median_hours)}</td><td>{formatHours(arrivalCancelStats?.followup_stays?.avg_hours)}</td><td>{formatHours(avgArrivalCancelStats?.followup_stays?.median_hours)}</td><td>{formatHours(avgArrivalCancelStats?.followup_stays?.avg_hours)}</td></tr>
+                 </tbody>
+             </table>
+           </div>
+        </section>
       </div>
     </div>
   );

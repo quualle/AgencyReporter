@@ -71,8 +71,19 @@ class QueryManager:
                 "GET_COMPLETED_CARE_STAYS": quotas.GET_COMPLETED_CARE_STAYS
             })
             
-            # Load reaction time queries (to be added when provided)
-            # from ..queries.reaction_times import reaction_times
+            # Load reaction time queries
+            from ..queries.reaction_times import reaction_times
+            self.queries.update({
+                "TIME_POSTING_TO_RESERVATION_STATS": reaction_times.TIME_POSTING_TO_RESERVATION_STATS,
+                "TIME_RESERVATION_TO_FIRST_PROPOSAL_STATS": reaction_times.TIME_RESERVATION_TO_FIRST_PROPOSAL_STATS,
+                "TIME_PROPOSAL_TO_CANCELLATION_STATS": reaction_times.TIME_PROPOSAL_TO_CANCELLATION_STATS,
+                "TIME_ARRIVAL_TO_CANCELLATION_STATS": reaction_times.TIME_ARRIVAL_TO_CANCELLATION_STATS,
+                # Overall Stats
+                "TIME_POSTING_TO_RESERVATION_STATS_OVERALL": reaction_times.TIME_POSTING_TO_RESERVATION_STATS_OVERALL,
+                "TIME_RESERVATION_TO_FIRST_PROPOSAL_STATS_OVERALL": reaction_times.TIME_RESERVATION_TO_FIRST_PROPOSAL_STATS_OVERALL,
+                "TIME_PROPOSAL_TO_CANCELLATION_STATS_OVERALL": reaction_times.TIME_PROPOSAL_TO_CANCELLATION_STATS_OVERALL,
+                "TIME_ARRIVAL_TO_CANCELLATION_STATS_OVERALL": reaction_times.TIME_ARRIVAL_TO_CANCELLATION_STATS_OVERALL
+            })
             
             # Load profile quality queries (to be added when provided)
             # from ..queries.profile_quality import profile_quality
@@ -468,41 +479,43 @@ class QueryManager:
             "end_date": end_date
         })
         
-        # Calculate cancellation rate
-        proposal_count = proposal_results[0]["proposal_count"] if proposal_results else 0
-        cancelled_count = cancelled_results[0]["abgebrochen_vor_arrival"] if cancelled_results else 0
-        lt_3_days = cancelled_results[0]["lt_3_days"] if cancelled_results else 0
-        btw_3_7_days = cancelled_results[0]["btw_3_7_days"] if cancelled_results else 0
-        btw_8_14_days = cancelled_results[0]["btw_8_14_days"] if cancelled_results else 0
-        btw_15_30_days = cancelled_results[0]["btw_15_30_days"] if cancelled_results else 0
+        # Calculate relative ratios for each bucket
+        def fmt_ratio(val, total):
+            return f"{(val / total) * 100:.1f}%" if total > 0 else "0.0%"
         
-        ratio = 0
-        if proposal_count > 0:
-            ratio = cancelled_count / proposal_count
+        def bucket_output(row, total):
+            return {
+                "count": row["abgebrochen_vor_arrival"],
+                "lt_3_days": {"count": row["lt_3_days"], "ratio": fmt_ratio(row["lt_3_days"], total)},
+                "btw_3_7_days": {"count": row["btw_3_7_days"], "ratio": fmt_ratio(row["btw_3_7_days"], total)},
+                "btw_8_14_days": {"count": row["btw_8_14_days"], "ratio": fmt_ratio(row["btw_8_14_days"], total)},
+                "btw_15_30_days": {"count": row["btw_15_30_days"], "ratio": fmt_ratio(row["btw_15_30_days"], total)}
+            }
+        
+        # Map results by group
+        # Calculate proposal count for denominator
+        proposal_count = proposal_results[0]["proposal_count"] if proposal_results else 0
+        
+        # Extract bucket counts per group
+        buckets = {"gesamt": {}, "nur_erstanreise": {}, "ohne_erstanreise": {}}
+        for row in cancelled_results:
+            gruppe = row["gruppe"]
+            if gruppe in buckets:
+                buckets[gruppe] = bucket_output(row, proposal_count)
+        
+        # Calculate overall cancellation ratio
+        gesamt_cancelled = buckets.get("gesamt", {}).get("count", 0)
+        gesamt_ratio = gesamt_cancelled / proposal_count if proposal_count > 0 else 0
         
         agency_name = None
         if proposal_results:
             agency_name = proposal_results[0]["agency_name"]
         
-        # Helper to format bucket output
-        def bucket_output(row, total):
-            def rel(val):
-                return f"{(val / total) * 100:.1f}%" if total > 0 else "0.0%"
-            return {
-                "count": row["abgebrochen_vor_arrival"],
-                "lt_3_days": {"count": row["lt_3_days"], "ratio": rel(row["lt_3_days"])} ,
-                "btw_3_7_days": {"count": row["btw_3_7_days"], "ratio": rel(row["btw_3_7_days"])} ,
-                "btw_8_14_days": {"count": row["btw_8_14_days"], "ratio": rel(row["btw_8_14_days"])} ,
-                "btw_15_30_days": {"count": row["btw_15_30_days"], "ratio": rel(row["btw_15_30_days"])}
-            }
-        
-        # Map results by group
-        buckets = {row["gruppe"]: bucket_output(row, row["abgebrochen_vor_arrival"]) for row in cancelled_results}
-        
         return {
             "agency_id": agency_id,
             "agency_name": agency_name,
             "proposal_count": proposal_count,
+            "cancellation_ratio_gesamt": f"{gesamt_ratio * 100:.1f}%",
             "cancellation_buckets": buckets,
             "name": "Abbruchrate vor Anreise",
             "description": "Zeigt, wie viel % der vorgeschlagenen Pflegekräfte von der Agentur wieder abgebrochen wurden (vor Anreise), aufgeschlüsselt nach Kurzfristigkeit und Erstanreise/Wechsel."
@@ -631,3 +644,41 @@ class QueryManager:
             start_date = end_date - timedelta(days=90)
         
         return start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
+
+    # --- Methods for Overall Reaction Time Stats --- 
+
+    def get_overall_posting_to_reservation_stats(self, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> dict:
+        if not start_date or not end_date:
+            start_date, end_date = self._calculate_date_range(time_period)
+        params = {"start_date": start_date, "end_date": end_date}
+        results = self.execute_query("TIME_POSTING_TO_RESERVATION_STATS_OVERALL", params)
+        return results[0] if results else {"median_hours": None, "avg_hours": None}
+
+    def get_overall_reservation_to_first_proposal_stats(self, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> dict:
+        if not start_date or not end_date:
+            start_date, end_date = self._calculate_date_range(time_period)
+        params = {"start_date": start_date, "end_date": end_date}
+        results = self.execute_query("TIME_RESERVATION_TO_FIRST_PROPOSAL_STATS_OVERALL", params)
+        return results[0] if results else {"median_hours": None, "avg_hours": None}
+
+    def get_overall_proposal_to_cancellation_stats(self, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> dict:
+        if not start_date or not end_date:
+            start_date, end_date = self._calculate_date_range(time_period)
+        params = {"start_date": start_date, "end_date": end_date}
+        results = self.execute_query("TIME_PROPOSAL_TO_CANCELLATION_STATS_OVERALL", params)
+        return results[0] if results else {"median_hours": None, "avg_hours": None}
+
+    def get_overall_arrival_to_cancellation_stats(self, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> dict:
+        if not start_date or not end_date:
+            start_date, end_date = self._calculate_date_range(time_period)
+        params = {"start_date": start_date, "end_date": end_date}
+        results = self.execute_query("TIME_ARRIVAL_TO_CANCELLATION_STATS_OVERALL", params)
+        stats = {"overall": None, "first_stays": None, "followup_stays": None}
+        for row in results:
+            group = row.get("group_type")
+            if group in stats:
+                stats[group] = {
+                    "median_hours": row["median_hours"],
+                    "avg_hours": row["avg_hours"]
+                }
+        return stats

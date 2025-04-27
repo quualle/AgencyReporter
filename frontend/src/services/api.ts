@@ -22,74 +22,6 @@ export interface Agency {
   contact_phone?: string;
 }
 
-export interface KPIData {
-  agency_id: string;
-  agency_name?: string;
-  total_jobs_viewed?: number;
-  total_jobs_reserved?: number;
-  total_jobs_fulfilled?: number;
-  total_jobs_cancelled?: number;
-  total_jobs_pending?: number;
-  total_caregivers_assigned?: number;
-  total_caregivers_started?: number;
-  total_ended_early?: number;
-  total_completed?: number;
-  reservation_rate?: number;
-  fulfillment_rate?: number;
-  cancellation_rate?: number;
-  start_rate?: number;
-  completion_rate?: number;
-  early_end_rate?: number;
-}
-
-export interface ResponseTimeData {
-  agency_id: string;
-  agency_name?: string;
-  avg_time_to_reservation?: number;
-  avg_time_to_proposal?: number;
-  avg_time_to_cancellation?: number;
-  avg_time_before_start?: number;
-  avg_time_to_any_cancellation?: number;
-}
-
-export interface ProfileQualityData {
-  agency_id: string;
-  agency_name?: string;
-  total_caregivers?: number;
-  experience_violations?: number;
-  language_violations?: number;
-  smoker_violations?: number;
-  age_violations?: number;
-  license_violations?: number;
-  experience_violation_rate?: number;
-  language_violation_rate?: number;
-  smoker_violation_rate?: number;
-  age_violation_rate?: number;
-  license_violation_rate?: number;
-}
-
-export interface StrengthWeaknessItem {
-  metric_key: string;
-  metric_name: string;
-  value: number;
-  value_formatted: string;
-  benchmark: number;
-  benchmark_formatted: string;
-  difference: number;
-  category: 'strength' | 'weakness' | 'neutral';
-  category_name: string;
-  normalized_score: number;
-}
-
-export interface StrengthWeaknessAnalysis {
-  agency_id: string;
-  agency_name?: string;
-  strengths: StrengthWeaknessItem[];
-  weaknesses: StrengthWeaknessItem[];
-  neutral: StrengthWeaknessItem[];
-  overall_score: number;
-}
-
 export interface ComparisonData {
   selected_agency: any;
   all_agencies: any[];
@@ -100,7 +32,7 @@ export interface ComparisonData {
 export const apiService = {
   // Agencies
   getAgencies: async (): Promise<Agency[]> => {
-    const response = await api.get('/agencies');
+    const response = await api.get('/agencies/');
     return response.data;
   },
 
@@ -109,59 +41,69 @@ export const apiService = {
     return response.data;
   },
 
-  // KPIs
-  getAgencyKPIs: async (id: string, timePeriod: string): Promise<KPIData> => {
-    const response = await api.get(`/kpis/${id}?time_period=${timePeriod}`);
+  // Quotas (KPIs)
+  getAgencyQuotas: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/quotas/${id}/all?time_period=${timePeriod}`);
     return response.data;
   },
 
-  compareAgencyKPIs: async (id: string, timePeriod: string): Promise<ComparisonData> => {
-    const response = await api.post('/kpis/compare', { agency_id: id, time_period: timePeriod });
+  // Reaction Times - Einzelne Agentur
+  getAgencyReactionTimes: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/reaction_times/${id}?time_period=${timePeriod}`);
+    return response.data;
+  },
+  getPostingToReservationStats: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/reaction_times/${id}/posting_to_reservation?time_period=${timePeriod}`);
+    return response.data;
+  },
+  getReservationToFirstProposalStats: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/reaction_times/${id}/reservation_to_first_proposal?time_period=${timePeriod}`);
+    return response.data;
+  },
+  getProposalToCancellationStats: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/reaction_times/${id}/proposal_to_cancellation?time_period=${timePeriod}`);
+    return response.data;
+  },
+  getArrivalToCancellationStats: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/reaction_times/${id}/arrival_to_cancellation?time_period=${timePeriod}`);
     return response.data;
   },
 
-  // Response Times
-  getAgencyResponseTimes: async (id: string, timePeriod: string): Promise<ResponseTimeData> => {
-    const response = await api.get(`/response-times/${id}?time_period=${timePeriod}`);
+  // Overall Average Stats (All Agencies)
+  getOverallPostingToReservationStats: async (timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/reaction_times/stats/overall/posting_to_reservation?time_period=${timePeriod}`);
+    return response.data;
+  },
+  getOverallReservationToFirstProposalStats: async (timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/reaction_times/stats/overall/reservation_to_first_proposal?time_period=${timePeriod}`);
+    return response.data;
+  },
+  getOverallProposalToCancellationStats: async (timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/reaction_times/stats/overall/proposal_to_cancellation?time_period=${timePeriod}`);
+    return response.data;
+  },
+  getOverallArrivalToCancellationStats: async (timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/reaction_times/stats/overall/arrival_to_cancellation?time_period=${timePeriod}`);
     return response.data;
   },
 
-  compareAgencyResponseTimes: async (id: string, timePeriod: string): Promise<ComparisonData> => {
-    const response = await api.post('/response-times/compare', { agency_id: id, time_period: timePeriod });
+  // Comparison (Simplified Average - potentially deprecate or refine later)
+  compareAgencyReactionTimes: async (id: string, timePeriod: string = 'last_quarter'): Promise<ComparisonData> => {
+    const response = await api.post('/reaction_times/compare', { agency_id: id, time_period: timePeriod });
     return response.data;
   },
 
   // Profile Quality
-  getAgencyProfileQuality: async (id: string, timePeriod: string): Promise<ProfileQualityData> => {
-    const response = await api.get(`/profile-quality/${id}?time_period=${timePeriod}`);
+  getAgencyProfileQuality: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/profile_quality/${id}?time_period=${timePeriod}`);
     return response.data;
   },
 
-  compareAgencyProfileQuality: async (id: string, timePeriod: string): Promise<ComparisonData> => {
-    const response = await api.post('/profile-quality/compare', { agency_id: id, time_period: timePeriod });
+  // Quotas with Reasons
+  getAgencyEarlyEndReasons: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/quotas_with_reasons/${id}/early-end-reasons?time_period=${timePeriod}`);
     return response.data;
   },
-
-  // LLM Analysis
-  getStrengthWeaknessAnalysis: async (id: string, timePeriod: string): Promise<StrengthWeaknessAnalysis> => {
-    const response = await api.get(`/llm-analysis/${id}/strength-weakness?time_period=${timePeriod}`);
-    return response.data;
-  },
-
-  getCancellationAnalysis: async (id: string, timePeriod: string): Promise<any> => {
-    const response = await api.get(`/llm-analysis/${id}/cancellations?time_period=${timePeriod}`);
-    return response.data;
-  },
-
-  getViolationsAnalysis: async (id: string, timePeriod: string): Promise<any> => {
-    const response = await api.get(`/llm-analysis/${id}/violations?time_period=${timePeriod}`);
-    return response.data;
-  },
-  
-  getAgencySummary: async (id: string, timePeriod: string): Promise<any> => {
-    const response = await api.get(`/llm-analysis/${id}/summary?time_period=${timePeriod}`);
-    return response.data;
-  }
 };
 
 export default apiService; 

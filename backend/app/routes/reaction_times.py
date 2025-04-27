@@ -253,4 +253,70 @@ async def get_arrival_to_cancellation_stats(
             "end_date": end_date
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch arrival_to_cancellation stats: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to fetch arrival_to_cancellation stats: {str(e)}")
+
+# --- Endpoints for Overall Reaction Time Stats --- 
+
+@router.get("/stats/overall/posting_to_reservation")
+async def get_overall_posting_to_reservation_stats(
+    start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Median und Durchschnitt (in Stunden) von Posting bis Reservierung für ALLE Agenturen
+    """
+    try:
+        qm = QueryManager()
+        stats = qm.get_overall_posting_to_reservation_stats(start_date, end_date, time_period)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch overall posting_to_reservation stats: {str(e)}")
+
+@router.get("/stats/overall/reservation_to_first_proposal")
+async def get_overall_reservation_to_first_proposal_stats(
+    start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Median und Durchschnitt (in Stunden) von Reservierung bis erstem Vorschlag für ALLE Agenturen
+    """
+    try:
+        qm = QueryManager()
+        stats = qm.get_overall_reservation_to_first_proposal_stats(start_date, end_date, time_period)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch overall reservation_to_first_proposal stats: {str(e)}")
+
+@router.get("/stats/overall/proposal_to_cancellation")
+async def get_overall_proposal_to_cancellation_stats(
+    start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Median und Durchschnitt (in Stunden) von Vorschlag bis Abbruch (vor Anreise) für ALLE Agenturen
+    """
+    try:
+        qm = QueryManager()
+        stats = qm.get_overall_proposal_to_cancellation_stats(start_date, end_date, time_period)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch overall proposal_to_cancellation stats: {str(e)}")
+
+@router.get("/stats/overall/arrival_to_cancellation")
+async def get_overall_arrival_to_cancellation_stats(
+    start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Median und Durchschnitt (in Stunden) von Anreise bis Abbruch (vor Anreise) für ALLE Agenturen (inkl. Buckets)
+    """
+    try:
+        qm = QueryManager()
+        stats = qm.get_overall_arrival_to_cancellation_stats(start_date, end_date, time_period)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch overall arrival_to_cancellation stats: {str(e)}") 

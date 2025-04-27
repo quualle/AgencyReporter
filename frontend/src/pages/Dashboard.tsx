@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
-import apiService, { KPIData, ResponseTimeData, ProfileQualityData } from '../services/api';
+import apiService from '../services/api';
 import Loading from '../components/common/Loading';
 import ErrorMessage from '../components/common/ErrorMessage';
 import ExportButton from '../components/common/ExportButton';
@@ -10,9 +10,9 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { selectedAgency, timePeriod } = useAppStore();
   
-  const [kpiData, setKpiData] = useState<KPIData | null>(null);
-  const [responseTimeData, setResponseTimeData] = useState<ResponseTimeData | null>(null);
-  const [profileData, setProfileData] = useState<ProfileQualityData | null>(null);
+  const [kpiData, setKpiData] = useState<any>(null);
+  const [responseTimeData, setResponseTimeData] = useState<any>(null);
+  const [profileData, setProfileData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,8 +26,8 @@ const Dashboard: React.FC = () => {
         
         // Fetch data in parallel
         const [kpiResponse, responseTimeResponse, profileResponse] = await Promise.all([
-          apiService.getAgencyKPIs(selectedAgency.agency_id, timePeriod),
-          apiService.getAgencyResponseTimes(selectedAgency.agency_id, timePeriod),
+          apiService.getAgencyQuotas(selectedAgency.agency_id, timePeriod),
+          apiService.getAgencyReactionTimes(selectedAgency.agency_id, timePeriod),
           apiService.getAgencyProfileQuality(selectedAgency.agency_id, timePeriod)
         ]);
         
