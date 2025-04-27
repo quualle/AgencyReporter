@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Dict, List, Optional, Any
 from ..utils.query_manager import QueryManager
 from ..models import TimeFilter, AgencyRequest
@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.get("/postings")
 async def get_posting_metrics(
-    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
     """
     Get metrics for all postings
@@ -23,7 +23,7 @@ async def get_posting_metrics(
 @router.get("/{agency_id}/reservations")
 async def get_agency_reservation_metrics(
     agency_id: str,
-    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
     """
     Get reservation metrics for a specific agency
@@ -41,7 +41,7 @@ async def get_agency_reservation_metrics(
 @router.get("/{agency_id}/fulfillment")
 async def get_fulfillment_rate(
     agency_id: str,
-    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
     """
     Get fulfillment rate for a specific agency
@@ -60,7 +60,7 @@ async def get_fulfillment_rate(
 @router.get("/{agency_id}/withdrawal")
 async def get_withdrawal_rate(
     agency_id: str,
-    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
     """
     Get withdrawal rate for a specific agency
@@ -79,7 +79,7 @@ async def get_withdrawal_rate(
 @router.get("/{agency_id}/pending")
 async def get_pending_rate(
     agency_id: str,
-    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
     """
     Get pending rate for a specific agency
@@ -98,7 +98,7 @@ async def get_pending_rate(
 @router.get("/{agency_id}/arrival")
 async def get_arrival_rate(
     agency_id: str,
-    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
     """
     Get arrival rate for a specific agency
@@ -117,7 +117,7 @@ async def get_arrival_rate(
 @router.get("/{agency_id}/cancellation-before-arrival")
 async def get_cancellation_before_arrival_rate(
     agency_id: str,
-    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
     """
     Get cancellation before arrival rate for a specific agency
@@ -136,7 +136,7 @@ async def get_cancellation_before_arrival_rate(
 @router.get("/{agency_id}/completion")
 async def get_completion_rate(
     agency_id: str,
-    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
     """
     Get completion rate for a specific agency
@@ -155,7 +155,7 @@ async def get_completion_rate(
 @router.get("/{agency_id}/all")
 async def get_all_quotas(
     agency_id: str,
-    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
     """
     Get all quota metrics for a specific agency
@@ -233,3 +233,23 @@ async def get_custom_metrics(request: Dict[str, Any]):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch custom metrics: {str(e)}")
+
+@router.get("/stats/overall/cancellation-before-arrival")
+async def get_overall_cancellation_stats(
+    start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Get overall average cancellation before arrival stats across all agencies.
+    """
+    try:
+        query_manager = QueryManager()
+        stats = query_manager.get_overall_cancellation_before_arrival_stats(start_date, end_date, time_period)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch overall cancellation before arrival stats: {str(e)}")
+
+# Include other routers if necessary
+# from . import other_router
+# router.include_router(other_router.router)

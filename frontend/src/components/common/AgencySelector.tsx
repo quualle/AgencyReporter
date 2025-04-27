@@ -2,8 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import apiService, { Agency } from '../../services/api';
 
+// Erweitere das Agency Interface um das neue Flag
+interface AgencyWithStatus extends Agency {
+  is_active_recently: boolean;
+}
+
 const AgencySelector: React.FC = () => {
-  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [agencies, setAgencies] = useState<AgencyWithStatus[]>([]); // Nutze erweitertes Interface
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -13,12 +18,20 @@ const AgencySelector: React.FC = () => {
     const fetchAgencies = async () => {
       try {
         setIsLoading(true);
-        const data = await apiService.getAgencies();
-        setAgencies(data);
+        const data = await apiService.getAgencies(); // Holt jetzt Agenturen mit is_active_recently
         
-        // Auto-select the first agency if none is selected
-        if (!selectedAgency && data.length > 0) {
-          setSelectedAgency(data[0]);
+        // Stelle sicher, dass is_active_recently immer boolean ist (default: false)
+        const agenciesWithStatus: AgencyWithStatus[] = data.map(agency => ({
+          ...agency,
+          is_active_recently: agency.is_active_recently ?? false 
+        }));
+        
+        setAgencies(agenciesWithStatus);
+        
+        // Auto-select the first active agency if none is selected
+        if (!selectedAgency && agenciesWithStatus.length > 0) {
+          const firstActive = agenciesWithStatus.find(a => a.is_active_recently);
+          setSelectedAgency(firstActive || agenciesWithStatus[0]); // Wähle die erste aktive, sonst die erste überhaupt
         }
         
         setError(null);
@@ -31,7 +44,7 @@ const AgencySelector: React.FC = () => {
     };
     
     fetchAgencies();
-  }, [selectedAgency, setSelectedAgency]);
+  }, [selectedAgency, setSelectedAgency]); // Abhängigkeiten prüfen
   
   const handleAgencyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const agencyId = e.target.value;
@@ -58,6 +71,10 @@ const AgencySelector: React.FC = () => {
     );
   }
   
+  // Teile Agenturen in aktiv und inaktiv
+  const activeAgencies = agencies.filter(a => a.is_active_recently);
+  const inactiveAgencies = agencies.filter(a => !a.is_active_recently);
+  
   return (
     <div className="agency-selector">
       <select
@@ -66,11 +83,24 @@ const AgencySelector: React.FC = () => {
         onChange={handleAgencyChange}
       >
         <option value="" disabled>Agentur auswählen</option>
-        {agencies.map((agency) => (
-          <option key={agency.agency_id} value={agency.agency_id}>
-            {agency.agency_name}
-          </option>
-        ))}
+        {activeAgencies.length > 0 && (
+          <optgroup label="Aktive Agenturen">
+            {activeAgencies.map((agency) => (
+              <option key={agency.agency_id} value={agency.agency_id}>
+                {agency.agency_name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {inactiveAgencies.length > 0 && (
+          <optgroup label="Inaktive Agenturen">
+            {inactiveAgencies.map((agency) => (
+              <option key={agency.agency_id} value={agency.agency_id}>
+                {agency.agency_name}
+              </option>
+            ))}
+          </optgroup>
+        )}
       </select>
     </div>
   );

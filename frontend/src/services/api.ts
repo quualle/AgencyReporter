@@ -20,6 +20,7 @@ export interface Agency {
   location?: string;
   contact_email?: string;
   contact_phone?: string;
+  is_active_recently?: boolean;
 }
 
 export interface ComparisonData {
@@ -44,6 +45,11 @@ export const apiService = {
   // Quotas (KPIs)
   getAgencyQuotas: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
     const response = await api.get(`/quotas/${id}/all?time_period=${timePeriod}`);
+    return response.data;
+  },
+
+  getCancellationBeforeArrivalRate: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/quotas/${id}/cancellation-before-arrival?time_period=${timePeriod}`);
     return response.data;
   },
 
@@ -86,6 +92,10 @@ export const apiService = {
     const response = await api.get(`/reaction_times/stats/overall/arrival_to_cancellation?time_period=${timePeriod}`);
     return response.data;
   },
+  getOverallCancellationBeforeArrivalStats: async (timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/quotas/stats/overall/cancellation-before-arrival?time_period=${timePeriod}`);
+    return response.data;
+  },
 
   // Comparison (Simplified Average - potentially deprecate or refine later)
   compareAgencyReactionTimes: async (id: string, timePeriod: string = 'last_quarter'): Promise<ComparisonData> => {
@@ -102,6 +112,11 @@ export const apiService = {
   // Quotas with Reasons
   getAgencyEarlyEndReasons: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
     const response = await api.get(`/quotas_with_reasons/${id}/early-end-reasons?time_period=${timePeriod}`);
+    return response.data;
+  },
+
+  getAgencyCancellationReasons: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+    const response = await api.get(`/quotas_with_reasons/${id}/cancellation-reasons?time_period=${timePeriod}`);
     return response.data;
   },
 };

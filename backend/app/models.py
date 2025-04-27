@@ -7,11 +7,25 @@ class Agency(BaseModel):
     """Model for agency data"""
     agency_id: str
     agency_name: str
-    created_at: Optional[str] = None
+    created_at: Optional[datetime] = None
     status: Optional[str] = None
     location: Optional[str] = None
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
+    website: Optional[str] = None
+    nationalities: Optional[str] = None
+    contract_duration: Optional[str] = None
+    health_insurance: Optional[str] = None
+    liability_insurance: Optional[str] = None
+    accident_insurance: Optional[str] = None
+    hours_per_week: Optional[str] = None
+    night_care: Optional[str] = None
+    ger_minimum_wage: Optional[str] = None
+    is_active_recently: Optional[bool] = None
+
+    class Config:
+        allow_population_by_field_name = True
+        orm_mode = True
 
 
 class KPIData(BaseModel):

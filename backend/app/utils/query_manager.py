@@ -68,7 +68,9 @@ class QueryManager:
                 "GET_CANCELLED_BEFORE_ARRIVAL": quotas.GET_CANCELLED_BEFORE_ARRIVAL,
                 
                 # Quote 7: Pflegeeinsatz angetreten - vollständig beendet
-                "GET_COMPLETED_CARE_STAYS": quotas.GET_COMPLETED_CARE_STAYS
+                "GET_COMPLETED_CARE_STAYS": quotas.GET_COMPLETED_CARE_STAYS,
+                # Neue Query für Overall Stats hinzufügen
+                "GET_OVERALL_CANCELLED_BEFORE_ARRIVAL_STATS": quotas.GET_OVERALL_CANCELLED_BEFORE_ARRIVAL_STATS
             })
             
             # Load reaction time queries
@@ -682,3 +684,33 @@ class QueryManager:
                     "avg_hours": row["avg_hours"]
                 }
         return stats
+
+    def get_overall_cancellation_before_arrival_stats(self, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> Dict[str, Any]:
+        """
+        Get overall average cancellation before arrival stats across all agencies.
+        Includes average counts for buckets and average proposal count.
+        """
+        if not start_date or not end_date:
+            start_date, end_date = self._calculate_date_range(time_period)
+            
+        params = {"start_date": start_date, "end_date": end_date}
+        results = self.execute_query("GET_OVERALL_CANCELLED_BEFORE_ARRIVAL_STATS", params)
+        
+        if results:
+            # Helper to calculate average ratio for buckets
+            avg_proposal_count = results[0].get("avg_proposal_count", 1) # Avoid division by zero
+            def avg_rel(avg_count):
+                 return f"{(avg_count / avg_proposal_count) * 100:.1f}%" if avg_proposal_count > 0 and avg_count is not None else "0.0%"
+
+            return {
+                "avg_proposal_count": results[0].get("avg_proposal_count"),
+                "avg_cancellation_ratio_gesamt": f"{results[0].get('avg_cancellation_ratio', 0) * 100:.1f}%",
+                "avg_cancellation_buckets": {
+                    "gesamt": {"count": results[0].get("avg_total_cancelled")},
+                    "lt_3_days": {"count": results[0].get("avg_lt_3_days"), "ratio": avg_rel(results[0].get("avg_lt_3_days"))},
+                    "btw_3_7_days": {"count": results[0].get("avg_btw_3_7_days"), "ratio": avg_rel(results[0].get("avg_btw_3_7_days"))},
+                    "btw_8_14_days": {"count": results[0].get("avg_btw_8_14_days"), "ratio": avg_rel(results[0].get("avg_btw_8_14_days"))},
+                    "btw_15_30_days": {"count": results[0].get("avg_btw_15_30_days"), "ratio": avg_rel(results[0].get("avg_btw_15_30_days"))}
+                }
+            }
+        return {"avg_proposal_count": None, "avg_cancellation_ratio_gesamt": None, "avg_cancellation_buckets": {}}

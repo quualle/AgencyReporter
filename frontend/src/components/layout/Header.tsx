@@ -9,39 +9,9 @@ const Header: React.FC = () => {
     <header className="bg-white dark:bg-gray-800 shadow-sm">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
         <div className="flex items-center">
-          <h1 className="text-xl font-bold text-gray-800 dark:text-white mr-8">
+          <h1 className="text-xl font-bold text-gray-800 dark:text-white">
             Agency Reporter
           </h1>
-          
-          <nav className="hidden md:flex">
-            <ul className="flex space-x-6">
-              <li>
-                <a href="/" className="text-gray-600 hover:text-primary-500 dark:text-gray-300 dark:hover:text-primary-400">
-                  Dashboard
-                </a>
-              </li>
-              <li>
-                <a href="/quotas" className="text-gray-600 hover:text-primary-500 dark:text-gray-300 dark:hover:text-primary-400">
-                  Quoten
-                </a>
-              </li>
-              <li>
-                <a href="/response-times" className="text-gray-600 hover:text-primary-500 dark:text-gray-300 dark:hover:text-primary-400">
-                  Reaktionszeiten
-                </a>
-              </li>
-              <li>
-                <a href="/quality" className="text-gray-600 hover:text-primary-500 dark:text-gray-300 dark:hover:text-primary-400">
-                  Qualität
-                </a>
-              </li>
-              <li>
-                <a href="/strength-weakness" className="text-gray-600 hover:text-primary-500 dark:text-gray-300 dark:hover:text-primary-400">
-                  Stärken/Schwächen
-                </a>
-              </li>
-            </ul>
-          </nav>
         </div>
         
         <div className="flex items-center space-x-4">
@@ -63,7 +33,7 @@ const Header: React.FC = () => {
             )}
           </button>
           
-          <button className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-md">
+          <button className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-md text-sm">
             Export PDF
           </button>
         </div>

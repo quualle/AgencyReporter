@@ -45,16 +45,18 @@ const ResponseTimesPage: React.FC = () => {
   const [resPropStats, setResPropStats] = useState<any>(null);
   const [propCancelStats, setPropCancelStats] = useState<any>(null);
   const [arrivalCancelStats, setArrivalCancelStats] = useState<any>(null);
+  const [cancellationRateData, setCancellationRateData] = useState<any>(null);
   
   // State für Durchschnittsdaten
   const [avgPostingResStats, setAvgPostingResStats] = useState<any>(null);
   const [avgResPropStats, setAvgResPropStats] = useState<any>(null);
   const [avgPropCancelStats, setAvgPropCancelStats] = useState<any>(null);
   const [avgArrivalCancelStats, setAvgArrivalCancelStats] = useState<any>(null);
+  const [avgCancellationStats, setAvgCancellationStats] = useState<any>(null);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-
+  
   useEffect(() => {
     const fetchData = async () => {
       if (!selectedAgency) {
@@ -96,31 +98,37 @@ const ResponseTimesPage: React.FC = () => {
           resProp,
           propCancel,
           arrivalCancel,
+          cancellationRate,
           avgPostingRes,
           avgResProp,
           avgPropCancel,
-          avgArrivalCancel
+          avgArrivalCancel,
+          avgCancellationRate
         ] = await Promise.all([
           // Individuelle Daten
           apiService.getPostingToReservationStats(selectedAgency.agency_id, timePeriod),
           apiService.getReservationToFirstProposalStats(selectedAgency.agency_id, timePeriod),
           apiService.getProposalToCancellationStats(selectedAgency.agency_id, timePeriod),
           apiService.getArrivalToCancellationStats(selectedAgency.agency_id, timePeriod),
+          apiService.getCancellationBeforeArrivalRate(selectedAgency.agency_id, timePeriod),
           // Durchschnittsdaten
           apiService.getOverallPostingToReservationStats(timePeriod),
           apiService.getOverallReservationToFirstProposalStats(timePeriod),
           apiService.getOverallProposalToCancellationStats(timePeriod),
-          apiService.getOverallArrivalToCancellationStats(timePeriod)
+          apiService.getOverallArrivalToCancellationStats(timePeriod),
+          apiService.getOverallCancellationBeforeArrivalStats(timePeriod)
         ]);
         
         setPostingResStats(postingRes);
         setResPropStats(resProp);
         setPropCancelStats(propCancel);
         setArrivalCancelStats(arrivalCancel);
+        setCancellationRateData(cancellationRate);
         setAvgPostingResStats(avgPostingRes);
         setAvgResPropStats(avgResProp);
         setAvgPropCancelStats(avgPropCancel);
         setAvgArrivalCancelStats(avgArrivalCancel);
+        setAvgCancellationStats(avgCancellationRate);
 
       } catch (err) {
         console.error('Error fetching response times data:', err);
@@ -146,18 +154,39 @@ const ResponseTimesPage: React.FC = () => {
   
   const industryAverage = avgResPropStats?.industry_average || {};
   
-  // Daten für Abbruch-Bucket-Chart aufbereiten
-  const getCancellationChartData = () => {
-    if (!arrivalCancelStats?.overall) return [];
-    const overall = arrivalCancelStats.overall;
-    const total = overall.abgebrochen_vor_arrival || 1; // Vermeide Division durch Null
+  // Prepare data for the cancellation bucket chart
+  const getCancellationBucketChartData = (): { name: string; count: number; ratio: string; color: string; percentage: number; label: string; avgPercentage?: number }[] => {
+    const buckets = cancellationRateData?.cancellation_buckets?.gesamt;
+    const avgBuckets = avgCancellationStats?.avg_cancellation_buckets;
+    const proposal_count = cancellationRateData?.proposal_count || 1;
+    const avg_proposal_count = avgCancellationStats?.avg_proposal_count || 1;
+
+    console.log("----- Calculating Chart Data -----");
+    console.log("Raw AvgCancellationStats in getCancellationBucketChartData:", avgCancellationStats);
+    console.log("Avg Buckets (gesamt):", avgBuckets);
+    console.log("Avg Proposal Count:", avg_proposal_count);
     
-    return [
-      { name: '< 3 Tage', value: (overall.lt_3_days?.count / total) * 100 || 0, count: overall.lt_3_days?.count || 0 },
-      { name: '3-7 Tage', value: (overall.btw_3_7_days?.count / total) * 100 || 0, count: overall.btw_3_7_days?.count || 0 },
-      { name: '8-14 Tage', value: (overall.btw_8_14_days?.count / total) * 100 || 0, count: overall.btw_8_14_days?.count || 0 },
-      { name: '15-30 Tage', value: (overall.btw_15_30_days?.count / total) * 100 || 0, count: overall.btw_15_30_days?.count || 0 }
+    if (!buckets || proposal_count === 0) return [];
+
+    const data = [
+      { name: '< 3 Tage', count: buckets.lt_3_days?.count ?? 0, ratio: buckets.lt_3_days?.ratio ?? '0.0%', color: '#ef4444', avgCount: avgBuckets?.lt_3_days?.count },
+      { name: '3-7 Tage', count: buckets.btw_3_7_days?.count ?? 0, ratio: buckets.btw_3_7_days?.ratio ?? '0.0%', color: '#f97316', avgCount: avgBuckets?.btw_3_7_days?.count },
+      { name: '8-14 Tage', count: buckets.btw_8_14_days?.count ?? 0, ratio: buckets.btw_8_14_days?.ratio ?? '0.0%', color: '#eab308', avgCount: avgBuckets?.btw_8_14_days?.count },
+      { name: '15-30 Tage', count: buckets.btw_15_30_days?.count ?? 0, ratio: buckets.btw_15_30_days?.ratio ?? '0.0%', color: '#22c55e', avgCount: avgBuckets?.btw_15_30_days?.count }
     ];
+    
+     const resultData = data.map(item => {
+       const calculatedAvgPercentage = avg_proposal_count > 0 ? ((item.avgCount || 0) / avg_proposal_count) * 100 : 0;
+       console.log(`Item: ${item.name}, AvgCount: ${item.avgCount}, AvgProposalCount: ${avg_proposal_count}, CalculatedAvgPercentage: ${calculatedAvgPercentage}`);
+       return {
+           ...item,
+           percentage: proposal_count > 0 ? ((item.count || 0) / proposal_count) * 100 : 0,
+           avgPercentage: calculatedAvgPercentage,
+           label: `${item.count} / ${proposal_count}`
+       };
+    });
+    console.log("Final Chart Data:", resultData);
+    return resultData;
   };
 
   if (isLoading) {
@@ -196,10 +225,22 @@ const ResponseTimesPage: React.FC = () => {
       </div>
 
       <div id="response-times-content" className="print-container">
-        {/* Abschnitt 1: Kern-Reaktionszeiten mit ComparisonScale */}
+        {/* Abschnitt 1: Kern-Reaktionszeiten mit ComparisonScale & Details Button */}
         <section className="mb-8">
           <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Kern-Reaktionszeiten (Median)</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="dashboard-card border-b-4 border-b-blue-500 relative">
+                <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-t-blue-500 border-l-transparent border-r-transparent z-10"></div>
+                <ComparisonScale 
+                  label="Abbruch vor Anreise (Ersteinsatz)"
+                  agencyName={selectedAgency?.agency_name}
+                  agencyValue={arrivalCancelStats?.first_stays?.median_hours}
+                  averageValue={avgArrivalCancelStats?.first_stays?.median_hours}
+                  formatValue={formatHours}
+                  evaluationType='higherIsBetter'
+                  tooltip="Medianzeit zwischen geplantem Anreisedatum und Abbruch (nur Ersteinsätze). Mehr Zeit im Voraus ist besser."
+                />
+            </div>
             <ComparisonScale 
               label="Posting → Reservierung"
               agencyName={selectedAgency?.agency_name}
@@ -227,59 +268,53 @@ const ResponseTimesPage: React.FC = () => {
               evaluationType='neutral'
               tooltip="Medianzeit von Personalvorschlag bis zum Abbruch durch die Agentur (vor geplanter Anreise)."
             />
-            <ComparisonScale 
-              label="Abbruch vor Anreise (Ersteinsatz)"
-              agencyName={selectedAgency?.agency_name}
-              agencyValue={arrivalCancelStats?.first_stays?.median_hours}
-              averageValue={avgArrivalCancelStats?.first_stays?.median_hours}
-              formatValue={formatHours}
-              evaluationType='lowerIsBetter'
-              tooltip="Medianzeit zwischen geplantem Anreisedatum und Abbruch (nur Ersteinsätze). Niedriger ist schlechter."
-            />
           </div>
-        </section>
-
-        {/* Abschnitt 2: Abbruch-Timing (vor Anreise) */}
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Abbruch-Timing (vor Anreise)</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="dashboard-card">
-              <h3 className="text-lg font-semibold mb-2">Verteilung der Abbruch-Zeitpunkte</h3>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                Prozentuale Verteilung, wie viele Tage vor geplanter Anreise die Agentur einen Einsatz abbricht. 
-                (Basierend auf {arrivalCancelStats?.overall?.abgebrochen_vor_arrival || 0} Fällen)
-              </p>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={getCancellationChartData()} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" unit="%" domain={[0, 100]}/>
-                    <YAxis type="category" dataKey="name" width={80}/>
-                    <Tooltip formatter={(value: number, name, props) => [`${value.toFixed(1)}% (${props.payload.count} Fälle)`, "Anteil"]}/>
-                    <Bar dataKey="value" fill="#ef4444" name="Anteil" />
-                </BarChart>
-              </ResponsiveContainer>
+            
+          <div className="mt-4 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md border-l-4 border-l-blue-500 lg:ml-4">
+              <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">Analyse: Abbruch vor Anreise</h3>
+              <div className="flex items-baseline space-x-4 mb-4">
+                <div className="text-center">
+                    <span className={`text-3xl font-bold ${ (parseFloat(cancellationRateData?.cancellation_ratio_gesamt?.replace('%','') || '0') <= parseFloat(avgCancellationStats?.avg_cancellation_ratio_gesamt?.replace('%','') || '0')) ? 'text-green-500' : 'text-red-500'}`}>
+                        {cancellationRateData?.cancellation_ratio_gesamt ?? 'N/A'}
+                    </span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Abbruchrate (Gesamt)</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">(Ø {avgCancellationStats?.avg_cancellation_ratio_gesamt ?? 'N/A'})</p>
+                </div>
+                 <div className="text-center border-l pl-4 border-gray-300 dark:border-gray-600">
+                    <span className="text-xl font-semibold text-gray-700 dark:text-gray-300">{cancellationRateData?.cancellation_buckets?.gesamt?.count ?? 0}</span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Abbrüche</p>
+                     <p className="text-xs text-gray-400 dark:text-gray-500">(Ø {avgCancellationStats?.avg_cancellation_buckets?.gesamt?.count?.toFixed(1) ?? 'N/A'})</p>
+                </div>
+                 <div className="text-center">
+                     <span className="text-xl font-semibold text-gray-700 dark:text-gray-300">{cancellationRateData?.proposal_count ?? 0}</span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Vorschläge</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">(Ø {avgCancellationStats?.avg_proposal_count?.toFixed(1) ?? 'N/A'})</p>
+                </div>
+              </div>
+              
+              <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Kurzfristigkeit der Abbrüche (Vergleich zum Durchschnitt)</h4>
+               <div className="h-48"> 
+                  <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={getCancellationBucketChartData()} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" unit="%" domain={[0, 100]}/>
+                        <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }}/>
+                        <Tooltip formatter={(value: number, name: string, props: any) => {
+                            if (name === 'Agentur') return [`${value.toFixed(1)}% (${props.payload.count} Fälle)`, name];
+                            if (name === 'Durchschnitt') return [`${value.toFixed(1)}%`, name];
+                            return [value, name];
+                        }}/>
+                        <Legend wrapperStyle={{ fontSize: '12px' }} />
+                        <Bar dataKey="avgPercentage" name="Durchschnitt" fill="#cbd5e1" radius={[0, 4, 4, 0]} barSize={10}/>
+                        <Bar dataKey="percentage" name="Agentur" label={{ position: 'right', formatter: (entry: any) => entry.label ?? '', fontSize: 10 }} radius={[0, 4, 4, 0]} barSize={10}>
+                          {getCancellationBucketChartData().map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
             </div>
-          </div>
-            <div className="dashboard-card">
-              <h3 className="text-lg font-semibold mb-2">Abbruch-Details</h3>
-              <table className="data-table w-full">
-                <thead>
-                  <tr><th>Zeitraum vor Anreise</th><th>Anzahl</th><th>Anteil</th></tr>
-                </thead>
-                <tbody>
-                  <tr><td>&lt; 3 Tage</td><td>{arrivalCancelStats?.overall?.lt_3_days?.count || 0}</td><td>{arrivalCancelStats?.overall?.lt_3_days?.ratio || '0.0%'}</td></tr>
-                  <tr><td>3-7 Tage</td><td>{arrivalCancelStats?.overall?.btw_3_7_days?.count || 0}</td><td>{arrivalCancelStats?.overall?.btw_3_7_days?.ratio || '0.0%'}</td></tr>
-                  <tr><td>8-14 Tage</td><td>{arrivalCancelStats?.overall?.btw_8_14_days?.count || 0}</td><td>{arrivalCancelStats?.overall?.btw_8_14_days?.ratio || '0.0%'}</td></tr>
-                  <tr><td>15-30 Tage</td><td>{arrivalCancelStats?.overall?.btw_15_30_days?.count || 0}</td><td>{arrivalCancelStats?.overall?.btw_15_30_days?.ratio || '0.0%'}</td></tr>
-                  <tr><td>**Gesamt**</td><td>**{arrivalCancelStats?.overall?.abgebrochen_vor_arrival || 0}**</td><td>**100.0%**</td></tr>
-                </tbody>
-              </table>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Hinweis: Der Durchschnittsvergleich ist für die Bucket-Verteilung noch nicht verfügbar.
-              </p>
-            </div>
-          </div>
         </section>
 
         {/* Abschnitt 3: Detaillierte Statistiken */}

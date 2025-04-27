@@ -318,3 +318,72 @@ WHERE
 GROUP BY
   agency_name
 """
+
+GET_OVERALL_CANCELLED_BEFORE_ARRIVAL_STATS = """
+-- Berechnet die durchschnittlichen Abbruchzahlen und Buckets über ALLE Agenturen
+WITH parsed AS (
+    -- Wählt relevante Felder aus care_stays und fügt agency_id hinzu
+    SELECT
+        cs._id, cs.arrival, cs.created_at, cs.is_swap, v.agency_id,
+        JSON_EXTRACT_ARRAY(cs.tracks) AS track_array
+    FROM `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+    JOIN `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.visors` v ON cs.visor_id = v._id
+    WHERE cs.stage = 'Abgebrochen'
+      AND cs.arrival IS NOT NULL AND cs.arrival != ''
+      AND cs.created_at BETWEEN @start_date AND @end_date -- Filter nach CareStay-Erstellung
+),
+abbruchzeiten AS (
+    -- Ermittelt den frühesten Abbruchzeitpunkt vor Anreise für jeden CareStay
+    SELECT
+        p._id, p.arrival, p.agency_id, p.is_swap,
+        MIN(TIMESTAMP(JSON_EXTRACT_SCALAR(track_item, '$.created_at'))) AS cancelled_at
+    FROM parsed p, UNNEST(p.track_array) AS track_item
+    WHERE JSON_EXTRACT_SCALAR(track_item, '$.differences.stage[1]') = 'Abgebrochen'
+      AND TIMESTAMP(JSON_EXTRACT_SCALAR(track_item, '$.created_at')) < TIMESTAMP(p.arrival)
+    GROUP BY p._id, p.arrival, p.agency_id, p.is_swap
+),
+diffs_per_agency AS (
+    -- Berechnet die Tage vor Anreise pro Abbruch und gruppiert nach Agentur
+    SELECT
+        agency_id,
+        is_swap,
+        TIMESTAMP_DIFF(TIMESTAMP(arrival), cancelled_at, DAY) AS days_before_arrival
+    FROM abbruchzeiten
+    WHERE TIMESTAMP_DIFF(TIMESTAMP(arrival), cancelled_at, DAY) >= 0
+      AND TIMESTAMP_DIFF(TIMESTAMP(arrival), cancelled_at, DAY) <= 30
+),
+buckets_per_agency AS (
+    -- Zählt Abbrüche pro Bucket FÜR JEDE Agentur
+    SELECT
+        agency_id,
+        COUNT(*) AS total_cancelled,
+        COUNTIF(days_before_arrival < 3) AS lt_3_days,
+        COUNTIF(days_before_arrival BETWEEN 3 AND 7) AS btw_3_7_days,
+        COUNTIF(days_before_arrival BETWEEN 8 AND 14) AS btw_8_14_days,
+        COUNTIF(days_before_arrival BETWEEN 15 AND 30) AS btw_15_30_days
+    FROM diffs_per_agency
+    GROUP BY agency_id
+),
+proposals_per_agency AS (
+    -- Zählt Vorschläge FÜR JEDE Agentur
+    SELECT
+        a._id as agency_id,
+        COUNT(cs._id) AS proposal_count
+    FROM `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+    JOIN `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+    JOIN `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+    WHERE cs.created_at BETWEEN @start_date AND @end_date
+    GROUP BY a._id
+)
+-- Berechnet die Durchschnittswerte über alle Agenturen
+SELECT
+    AVG(bpa.total_cancelled) AS avg_total_cancelled,
+    AVG(bpa.lt_3_days) AS avg_lt_3_days,
+    AVG(bpa.btw_3_7_days) AS avg_btw_3_7_days,
+    AVG(bpa.btw_8_14_days) AS avg_btw_8_14_days,
+    AVG(bpa.btw_15_30_days) AS avg_btw_15_30_days,
+    AVG(ppa.proposal_count) AS avg_proposal_count,
+    SAFE_DIVIDE(AVG(bpa.total_cancelled), AVG(ppa.proposal_count)) AS avg_cancellation_ratio
+FROM buckets_per_agency bpa
+JOIN proposals_per_agency ppa ON bpa.agency_id = ppa.agency_id
+"""

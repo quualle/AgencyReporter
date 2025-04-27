@@ -89,8 +89,6 @@ const QuotasPage: React.FC = () => {
         ]);
 
         console.log("API Response - Quotas Data:", quotasData);
-        console.log("API Response - Quotas Data (Detail):", JSON.stringify(quotasData, null, 2));
-        console.log("Selected Agency Data Structure:", JSON.stringify(quotasData?.selected_agency, null, 2));
 
         setAllQuotasData(quotasData);
         setCancellationRateData(cancellationRate);
@@ -121,9 +119,9 @@ const QuotasPage: React.FC = () => {
             reservation_rate: { current: 0.65, previous_period: 0.62, previous_year: 0.52 },
             fulfillment_rate: { current: 0.78, previous_period: 0.75, previous_year: 0.68 },
             cancellation_rate: { current: 0.10, previous_period: 0.12, previous_year: 0.20 },
-            start_rate: { current: 0.90, previous_period: 0.88, previous_year: 0.80 },
-            completion_rate: { current: 0.85, previous_period: 0.82, previous_year: 0.72 },
-            early_end_rate: { current: 0.15, previous_period: 0.18, previous_year: 0.28 }
+            start_rate: { current: 0.90, previous_period: 0.88, previous_year: 80 },
+            completion_rate: { current: 0.85, previous_period: 0.82, previous_year: 72 },
+            early_end_rate: { current: 0.15, previous_period: 0.18, previous_year: 28 }
           }
         };
         
@@ -326,7 +324,7 @@ const QuotasPage: React.FC = () => {
      }));
   };
 
-  // Prepare data for the funnel chart with better error handling
+  // Prepare funnel data with better error handling
   const prepareFunnelData = () => {
     // If no API data available, use sample data for development/testing
     if (!allQuotasData?.selected_agency) {
@@ -339,91 +337,35 @@ const QuotasPage: React.FC = () => {
         { name: 'Abgeschlossene Einsätze', value: 30, fill: '#2E7D32', fullValue: 100, percentage: '30.0%' }
       ];
     }
-
+    
+    console.log("Preparing funnel data with:", allQuotasData.selected_agency);
+    
     const sa = allQuotasData.selected_agency;
-    console.log("Preparing funnel with data:", sa);
     
-    // Generiere einen zufälligen Seed basierend auf der Agency-ID, um konsistente aber unterschiedliche Zahlen zu erhalten
-    const generateSeed = (agencyId: string): number => {
-      let seed = 0;
-      for (let i = 0; i < agencyId.length; i++) {
-        seed += agencyId.charCodeAt(i);
+    // Add total_postings if not available in the data
+    if (sa.total_postings === undefined) {
+      // Estimate total postings based on reservations and reservation rate
+      // or use a default value
+      if (sa.total_reservations && sa.reservation_rate) {
+        sa.total_postings = Math.round(sa.total_reservations / sa.reservation_rate);
+      } else {
+        sa.total_postings = 100; // Default fallback
       }
-      return seed;
-    };
-    
-    const generateRandomValue = (min: number, max: number, seed: number): number => {
-      // Einfache Pseudozufallsfunktion mit Seed
-      const x = Math.sin(seed) * 10000;
-      const rand = x - Math.floor(x);
-      return Math.floor(min + rand * (max - min));
-    };
-    
-    // Seed für die aktuelle Agentur
-    const seed = generateSeed(selectedAgency.agency_id);
-    
-    // Bestimme die tatsächliche Anzahl der Ausschreibungen oder generiere realistische Werte
-    // Die total_posting-Zahlen für verschiedene Agenturen sollten im Bereich 50-250 liegen
-    let total_postings;
-    
-    if (sa.total_postings !== undefined) {
-      // Echte Daten aus der API
-      total_postings = sa.total_postings;
-    } else if (sa.total_reservations !== undefined && sa.reservation_rate && sa.reservation_rate > 0) {
-      // Berechnet aus anderen echten Daten
-      total_postings = Math.round(sa.total_reservations / sa.reservation_rate);
-    } else {
-      // Generiere realistische aber unterschiedliche Werte für verschiedene Agenturen
-      total_postings = generateRandomValue(50, 250, seed);
     }
     
-    // Berechne die weiteren Werte in der Funnel-Kette
-    let total_reservations;
-    if (sa.total_reservations !== undefined) {
-      total_reservations = sa.total_reservations;
-    } else {
-      // Bei fehlenden Daten Reservierungsrate anwenden oder realistische Werte generieren
-      const reservationRate = sa.reservation_rate || 0.45 + (generateRandomValue(0, 30, seed + 1) / 100); // 45-75%
-      total_reservations = Math.round(total_postings * reservationRate);
-    }
+    // Check if we have the basic quota data
+    const total_postings = sa.total_postings || 100; 
     
-    let total_proposals;
-    if (sa.total_proposals !== undefined) {
-      total_proposals = sa.total_proposals;
-    } else {
-      // Verschiedene Vorschlagsraten pro Agentur: ca. 65-85% der Reservierungen
-      const proposalRate = sa.proposal_rate || 
-                          (sa.fulfillment_rate && sa.reservation_rate ? 
-                           sa.fulfillment_rate / sa.reservation_rate : 
-                           0.65 + (generateRandomValue(0, 20, seed + 2) / 100));
-      total_proposals = Math.round(total_reservations * proposalRate);
-    }
+    // Use optional chaining and fallbacks for all calculations
+    const reservations = Math.round(total_postings * (sa.reservation_rate || 0));
     
-    let total_starts;
-    if (sa.total_starts !== undefined) {
-      total_starts = sa.total_starts;
-    } else {
-      // Verschiedene Antrittsraten: ca. 75-95% der Vorschläge
-      const startRate = sa.start_rate || 0.75 + (generateRandomValue(0, 20, seed + 3) / 100);
-      total_starts = Math.round(total_proposals * startRate);
-    }
+    // Compute proposal rate if not directly available
+    const proposal_rate = sa.proposal_rate || 
+                        (sa.fulfillment_rate ? sa.fulfillment_rate / (sa.reservation_rate || 1) : 0.6);
+    const proposals = Math.round(reservations * proposal_rate);
     
-    let total_completions;
-    if (sa.total_completions !== undefined) {
-      total_completions = sa.total_completions;
-    } else {
-      // Verschiedene Abschlussraten: ca. 70-90% der Antritte
-      const completionRate = sa.completion_rate || 0.7 + (generateRandomValue(0, 20, seed + 4) / 100);
-      total_completions = Math.round(total_starts * completionRate);
-    }
-    
-    console.log(`Funnel Values for ${selectedAgency.agency_name}:`, {
-      total_postings,
-      total_reservations,
-      total_proposals,
-      total_starts,
-      total_completions
-    });
+    const started = Math.round(proposals * (sa.start_rate || 0));
+    const completed = Math.round(started * (sa.completion_rate || 0));
     
     return [
       { 
@@ -431,35 +373,35 @@ const QuotasPage: React.FC = () => {
         value: total_postings,
         fill: '#4F86C6',
         fullValue: total_postings,
-        percentage: formatPercentage(100)
+        percentage: '100%'
       },
       { 
         name: 'Reservierte Stellen', 
-        value: total_reservations,
+        value: reservations,
         fill: '#6A9ADB',
         fullValue: total_postings,
-        percentage: formatPercentage((total_reservations / total_postings) * 100)
+        percentage: formatPercentage((sa.reservation_rate || 0) * 100)
       },
       { 
         name: 'Personalvorschläge', 
-        value: total_proposals,
+        value: proposals,
         fill: '#65B2A9',
         fullValue: total_postings,
-        percentage: formatPercentage((total_proposals / total_postings) * 100)
+        percentage: formatPercentage(proposal_rate * (sa.reservation_rate || 0) * 100)
       },
       { 
         name: 'Angetretene Einsätze', 
-        value: total_starts,
+        value: started,
         fill: '#4CAF50',
         fullValue: total_postings,
-        percentage: formatPercentage((total_starts / total_postings) * 100)
+        percentage: formatPercentage((sa.start_rate || 0) * proposal_rate * (sa.reservation_rate || 0) * 100)
       },
       { 
         name: 'Abgeschlossene Einsätze', 
-        value: total_completions,
+        value: completed,
         fill: '#2E7D32',
         fullValue: total_postings,
-        percentage: formatPercentage((total_completions / total_postings) * 100)
+        percentage: formatPercentage((sa.completion_rate || 0) * (sa.start_rate || 0) * proposal_rate * (sa.reservation_rate || 0) * 100)
       }
     ];
   };
@@ -783,23 +725,29 @@ const QuotasPage: React.FC = () => {
                       isAnimationActive
                     >
                       <LabelList 
-                        position="right"
-                        fill="#000000"
+                        position="inside"
+                        fill="#FFFFFF"
                         stroke="none"
                         dataKey="name"
-                        offset={10}
+                        fontSize={12}
+                        fontWeight="bold"
                       />
                       <LabelList 
-                        position="center"
-                        fill="#ffffff"
-                        stroke="#000000"
-                        strokeWidth={0.75}
-                        fontWeight="bold"
+                        position="inside"
+                        fill="#FFFFFF"
+                        stroke="none"
+                        dataKey="percentage"
+                        fontSize={11}
+                        dy={15}
+                      />
+                      <LabelList 
+                        position="inside"
+                        fill="#FFFFFF"
+                        stroke="none"
                         dataKey="value"
-                        style={{
-                          fontSize: '16px',
-                          textShadow: '0px 0px 2px rgba(0,0,0,0.3)'
-                        }}
+                        formatter={(value: any) => `(${value})`}
+                        fontSize={10}
+                        dy={30}
                       />
                     </Funnel>
                   </FunnelChart>
@@ -808,43 +756,48 @@ const QuotasPage: React.FC = () => {
             </div>
             
             <div>
-              <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Erfolgsschritte im Prozess</h4>
+              <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Positive Prozesskennzahlen</h4>
               <div className="h-96">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     layout="vertical"
                     data={prepareDropoffData()}
-                    margin={{ top: 20, right: 30, left: 100, bottom: 5 }}
-                    barCategoryGap={10}
+                    margin={{ top: 20, right: 50, left: 100, bottom: 5 }}
+                    barGap={0}
+                    barCategoryGap={15}
                   >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
+                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                    <XAxis type="number" domain={[0, 100]} unit="%" />
                     <YAxis 
                       dataKey="stage" 
                       type="category" 
                       scale="band"
                       tick={{ fontSize: 12 }}
+                      width={120}
                     />
                     <Tooltip
+                      cursor={{fill: 'rgba(200, 200, 200, 0.2)'}}
                       formatter={(value: any, name: string, props: any) => {
                         return [`${value} (${props.payload.percentage})`, props.payload.stage];
                       }}
-                      cursor={{fill: 'rgba(180, 180, 180, 0.2)'}}
+                      labelFormatter={(label) => `${label}`}
                     />
                     <Bar dataKey="value" barSize={30}>
                       {prepareDropoffData().map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.fill} />
                       ))}
                       <LabelList 
-                        dataKey="percentage" 
+                        dataKey="value" 
                         position="insideRight" 
-                        fill="#000000"
+                        fill="#FFFFFF"
+                        formatter={(value: any) => value}
+                        fontWeight="bold"
                       />
                       <LabelList 
-                        dataKey="value" 
-                        position="right" 
-                        fill="#666666"
-                        formatter={(value: any) => `(${value})`}
+                        dataKey="percentage" 
+                        position="insideRight" 
+                        fill="#FFFFFF"
+                        formatter={(value: any) => value}
                         offset={40}
                       />
                     </Bar>
@@ -864,416 +817,225 @@ const QuotasPage: React.FC = () => {
           </div>
         </div>
         
+        <div className="mb-6 flex flex-wrap justify-center items-center bg-blue-50 dark:bg-blue-900/30 p-2 rounded-lg">
+          <button 
+            onClick={() => setShowTrendAnalysis(!showTrendAnalysis)} 
+            className={`mx-2 my-1 px-4 py-2 rounded-full text-sm font-medium ${
+              showTrendAnalysis ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-600'
+            }`}
+          >
+            📈 {showTrendAnalysis ? 'Trendanalyse ausblenden' : 'Trendanalyse anzeigen'}
+          </button>
+          <button 
+            onClick={() => setShowQuotaDetails(!showQuotaDetails)} 
+            className={`mx-2 my-1 px-4 py-2 rounded-full text-sm font-medium ${
+              showQuotaDetails ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-600'
+            }`}
+          >
+            📊 {showQuotaDetails ? 'Detailanalyse ausblenden' : 'Detailanalyse anzeigen'}
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="metric-card bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
-            <h3 className="font-medium mb-2">Reservierungsrate</h3>
-            <div className="value text-2xl font-bold mb-1">{formatPercentage((selectedAgencyScatterData?.reservation_rate || 0.45) * 100)}</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              Durchschnitt: {formatPercentage((allQuotasData?.industry_average?.reservation_rate || 0.42) * 100)}
+          <div className="metric-card">
+            <h3>Reservierungsrate</h3>
+            <div className="value">{formatPercentage((selectedAgencyScatterData?.reservation_rate || 0.65) * 100)}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Durchschnitt: {formatPercentage((allQuotasData?.industry_average?.reservation_rate || 0.62) * 100)}
             </div>
           </div>
           
-          <div className="metric-card bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
-            <h3 className="font-medium mb-2">Erfüllungsrate</h3>
-            <div className="value text-2xl font-bold mb-1">{formatPercentage((selectedAgencyScatterData?.fulfillment_rate || 0.68) * 100)}</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
+          <div className="metric-card">
+            <h3>Erfüllungsrate</h3>
+            <div className="value">{formatPercentage((selectedAgencyScatterData?.fulfillment_rate || 0.68) * 100)}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Durchschnitt: {formatPercentage((allQuotasData?.industry_average?.fulfillment_rate || 0.65) * 100)}
             </div>
           </div>
           
-          <div className="metric-card bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
-            <h3 className="font-medium mb-2">Abbruchrate (vor Anreise)</h3>
-            <div className="value text-2xl font-bold mb-1">{cancellationRateData?.cancellation_ratio_gesamt ?? formatPercentage((selectedAgencyScatterData?.cancellation_rate || 0.12) * 100)}</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              Durchschnitt: {formatPercentage((allQuotasData?.industry_average?.cancellation_rate || 0.15) * 100)}
+          <div className="metric-card relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-2 h-full bg-red-400 rounded-r"></div>
+            <h3>Abbruchrate (vor Anreise)</h3>
+            <div className="value">{cancellationRateData?.cancellation_ratio_gesamt ?? '12.5%'}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              ({cancellationRateData?.cancellation_buckets?.gesamt?.count ?? 15} von {cancellationRateData?.proposal_count ?? 120} Vorschlägen)
             </div>
           </div>
         </div>
-        
-        <div className="flex justify-end space-x-4 mb-4">
-            <button 
-              onClick={() => setShowQuotaDetails(!showQuotaDetails)} 
-            className={`flex items-center px-4 py-2 rounded ${
-              showQuotaDetails 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-            } hover:opacity-90 transition-colors`}
-          >
-            📊 {showQuotaDetails ? 'Analyse ausblenden' : 'Abbruchrate analysieren'}
-          </button>
-          
-          <button 
-            onClick={() => setShowTrendAnalysis(!showTrendAnalysis)} 
-            className={`flex items-center px-4 py-2 rounded ${
-              showTrendAnalysis 
-                ? 'bg-green-600 text-white' 
-                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-            } hover:opacity-90 transition-colors`}
-          >
-            📈 {showTrendAnalysis ? 'Trends ausblenden' : 'Trendanalyse anzeigen'}
-            </button>
-          </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Linke Spalte für Trendanalyse, wenn aktiv */}
-          <div className={`${showTrendAnalysis ? 'block' : 'hidden'} p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md h-fit`}>
-            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">
+          {/* Linke Spalte - Trendanalyse (wenn angezeigt) */}
+          <div style={{ display: showTrendAnalysis ? 'block' : 'none' }} className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md h-full">
+            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white flex items-center">
+              <span className="mr-2">📈</span> 
               Trend-Analyse: Quoten im Zeitverlauf
-              <span className="ml-2 text-xs font-normal px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded">Neu</span>
             </h3>
             
-            <div>
-              <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Entwicklung der wichtigsten KPIs</h4>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={prepareHistoricalTrendData()} margin={{ top: 5, right: 50, left: 20, bottom: 5 }}>
-                    <defs>
-                      <linearGradient id="reservationGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4F86C6" stopOpacity={0.7}/>
-                        <stop offset="95%" stopColor="#4F86C6" stopOpacity={0.1}/>
-                      </linearGradient>
-                      <linearGradient id="fulfillmentGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#65B2A9" stopOpacity={0.7}/>
-                        <stop offset="95%" stopColor="#65B2A9" stopOpacity={0.1}/>
-                      </linearGradient>
-                      <linearGradient id="cancellationGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#EF4444" stopOpacity={0.7}/>
-                        <stop offset="95%" stopColor="#EF4444" stopOpacity={0.1}/>
-                      </linearGradient>
-                      <linearGradient id="completionGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#2E7D32" stopOpacity={0.7}/>
-                        <stop offset="95%" stopColor="#2E7D32" stopOpacity={0.1}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                    <XAxis dataKey="period" scale="point" padding={{ left: 20, right: 20 }} />
-                    <YAxis unit="%" domain={[40, 90]} tickCount={6} />
-                    <Tooltip 
-                      formatter={(value) => `${value}%`} 
-                      contentStyle={{ 
-                        backgroundColor: 'rgba(255, 255, 255, 0.9)', 
-                        borderRadius: '8px',
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
-                      }}
-                    />
-                    <Legend 
-                      wrapperStyle={{ fontSize: '12px' }} 
-                      iconType="circle"
-                      iconSize={10}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="reservation_rate" 
-                      name="Reservierungsrate" 
-                      stroke="#4F86C6" 
-                      activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff' }} 
-                      strokeWidth={3}
-                      dot={{ strokeWidth: 2, r: 4, stroke: '#4F86C6', fill: 'white' }}
-                      fillOpacity={1}
-                      fill="url(#reservationGradient)"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="fulfillment_rate" 
-                      name="Erfüllungsrate" 
-                      stroke="#65B2A9" 
-                      activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }} 
-                      strokeWidth={3}
-                      dot={{ strokeWidth: 2, r: 4, stroke: '#65B2A9', fill: 'white' }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="cancellation_rate" 
-                      name="Abbruchrate" 
-                      stroke="#EF4444" 
-                      activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }} 
-                      strokeWidth={3}
-                      dot={{ strokeWidth: 2, r: 4, stroke: '#EF4444', fill: 'white' }}
-                      strokeDasharray="5 5"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="completion_rate" 
-                      name="Abschlussrate" 
-                      stroke="#2E7D32" 
-                      activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }} 
-                      strokeWidth={3}
-                      dot={{ strokeWidth: 2, r: 4, stroke: '#2E7D32', fill: 'white' }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              
-              <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-xs text-gray-600 dark:text-gray-300">
-                <p className="font-medium mb-1">Hinweis:</p>
-                <p>Die gestrichelte Linie stellt die Abbruchrate dar, bei der ein niedriger Wert besser ist.</p>
+            <div className="grid grid-cols-1 gap-6">
+              <div>
+                <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Entwicklung der wichtigsten KPIs</h4>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={prepareHistoricalTrendData()} margin={{ top: 5, right: 50, left: 20, bottom: 5 }}>
+                      <defs>
+                        <linearGradient id="colorReservation" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#4F86C6" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#4F86C6" stopOpacity={0.1}/>
+                        </linearGradient>
+                        <linearGradient id="colorFulfillment" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#65B2A9" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#65B2A9" stopOpacity={0.1}/>
+                        </linearGradient>
+                        <linearGradient id="colorCancellation" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#EF4444" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#EF4444" stopOpacity={0.1}/>
+                        </linearGradient>
+                        <linearGradient id="colorCompletion" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#2E7D32" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#2E7D32" stopOpacity={0.1}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis 
+                        dataKey="period" 
+                        scale="point" 
+                        padding={{ left: 20, right: 20 }} 
+                        tick={{ fontSize: 12, fill: '#666' }}
+                      />
+                      <YAxis 
+                        unit="%" 
+                        domain={[40, 90]} 
+                        tickCount={6} 
+                        tick={{ fontSize: 12, fill: '#666' }}
+                      />
+                      <Tooltip 
+                        formatter={(value) => [`${value}%`]} 
+                        contentStyle={{ backgroundColor: "rgba(255, 255, 255, 0.9)", borderRadius: "8px", border: "none", boxShadow: "0 2px 10px rgba(0,0,0,0.1)" }} 
+                      />
+                      <Legend 
+                        wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} 
+                        iconType="circle" 
+                        iconSize={10}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="reservation_rate" 
+                        name="Reservierungsrate"
+                        stroke="#4F86C6" 
+                        fill="url(#colorReservation)"
+                        strokeWidth={3}
+                        dot={{ r: 4, strokeWidth: 2 }}
+                        activeDot={{ r: 8, stroke: '#4F86C6', strokeWidth: 2 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="fulfillment_rate" 
+                        name="Erfüllungsrate" 
+                        stroke="#65B2A9" 
+                        fill="url(#colorFulfillment)" 
+                        strokeWidth={3}
+                        dot={{ r: 4, strokeWidth: 2 }}
+                        activeDot={{ r: 8, stroke: '#65B2A9', strokeWidth: 2 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="cancellation_rate" 
+                        name="Abbruchrate" 
+                        stroke="#EF4444" 
+                        fill="url(#colorCancellation)" 
+                        strokeWidth={3}
+                        dot={{ r: 4, strokeWidth: 2 }}
+                        activeDot={{ r: 8, stroke: '#EF4444', strokeWidth: 2 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="completion_rate" 
+                        name="Abschlussrate" 
+                        stroke="#2E7D32" 
+                        fill="url(#colorCompletion)" 
+                        strokeWidth={3}
+                        dot={{ r: 4, strokeWidth: 2 }}
+                        activeDot={{ r: 8, stroke: '#2E7D32', strokeWidth: 2 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
           </div>
           
-          {/* Rechte Spalte für Periodenvergleich, wenn Trendanalyse aktiv */}
-          {showTrendAnalysis && (
-            <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md h-fit">
-              <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Periodenvergleich: Aktuell vs. Vorperiode vs. Vorjahr</h4>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart 
-                    layout="vertical" 
-                    data={preparePeriodComparisonData()} 
-                    margin={{ top: 20, right: 30, left: 180, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" domain={[0, 100]} unit="%" />
-                    <YAxis dataKey="name" type="category" scale="band" width={180} />
-                    <Tooltip formatter={(value) => `${value}%`} />
-                    <Legend wrapperStyle={{ fontSize: '12px' }} />
-                    <Bar dataKey="previous_year" name="Vorjahr" barSize={10} fill="#90A4AE" />
-                    <Bar dataKey="previous_period" name="Vorperiode" barSize={10} fill="#64B5F6" />
-                    <Bar dataKey="current" name="Aktuell" barSize={10}>
-                      {preparePeriodComparisonData().map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.is_better ? '#4CAF50' : '#EF4444'} />
-                      ))}
-                    </Bar>
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-              
-              <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-xs text-gray-600 dark:text-gray-300">
-                <p className="font-medium mb-1">Interpretationshilfe:</p>
-                <p>Grüne Balken für die aktuelle Periode zeigen Verbesserungen, rote Balken Verschlechterungen an.</p>
-              </div>
-            </div>
-          )}
-        </div>
-        
-        {showQuotaDetails && cancellationRateData && timingData && avgCancellationStats && (
-          <div className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg border-l-4 border-blue-500 border-t border-r border-b border-gray-300 dark:border-gray-600 shadow-md">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Analyse: Abbruchrate vor Anreise</h3>
-              <button 
-                onClick={() => setShowQuotaDetails(false)} 
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <div className="flex items-baseline space-x-4 mb-4">
+          {/* Rechte Spalte - Quotendetails (wenn angezeigt) */}
+          <div style={{ display: showQuotaDetails ? 'block' : 'none' }} className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md h-full">
+            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white flex items-center">
+              <span className="mr-2">📊</span>
+              Analyse: Abbruchrate vor Anreise
+            </h3>
+            
+            {cancellationRateData && timingData && avgCancellationStats && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <div className="flex items-baseline space-x-4 mb-4">
                     <div className="text-center">
-                        <span className={`text-3xl font-bold ${ (parseFloat(cancellationRateData?.cancellation_ratio_gesamt?.replace('%','') || '0') <= parseFloat(avgCancellationStats?.avg_cancellation_ratio_gesamt?.replace('%','') || '0')) ? 'text-green-500' : 'text-red-500'}`}>
-                           {cancellationRateData?.cancellation_ratio_gesamt ?? 'N/A'}
-                        </span>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Abbruchrate (Gesamt)</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">(Ø {avgCancellationStats?.avg_cancellation_ratio_gesamt ?? 'N/A'})</p>
+                      <span className={`text-3xl font-bold ${ (parseFloat(cancellationRateData?.cancellation_ratio_gesamt?.replace('%','') || '0') <= parseFloat(avgCancellationStats?.avg_cancellation_ratio_gesamt?.replace('%','') || '0')) ? 'text-green-500' : 'text-red-500'}`}>
+                         {cancellationRateData?.cancellation_ratio_gesamt ?? 'N/A'}
+                      </span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Abbruchrate (Gesamt)</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">(Ø {avgCancellationStats?.avg_cancellation_ratio_gesamt ?? 'N/A'})</p>
                     </div>
-                     <div className="text-center border-l pl-4 border-gray-300 dark:border-gray-600">
-                        <span className="text-xl font-semibold text-gray-700 dark:text-gray-300">{cancellationRateData?.cancellation_buckets?.gesamt?.count ?? 0}</span>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Abbrüche</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">(Ø {avgCancellationStats?.avg_cancellation_buckets?.gesamt?.count?.toFixed(1) ?? 'N/A'})</p>
+                    <div className="text-center border-l pl-4 border-gray-300 dark:border-gray-600">
+                      <span className="text-xl font-semibold text-gray-700 dark:text-gray-300">{cancellationRateData?.cancellation_buckets?.gesamt?.count ?? 0}</span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Abbrüche</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">(Ø {avgCancellationStats?.avg_cancellation_buckets?.gesamt?.count?.toFixed(1) ?? 'N/A'})</p>
                     </div>
-                     <div className="text-center">
-                         <span className="text-xl font-semibold text-gray-700 dark:text-gray-300">{cancellationRateData?.proposal_count ?? 0}</span>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Vorschläge</p>
-                         <p className="text-xs text-gray-400 dark:text-gray-500">(Ø {avgCancellationStats?.avg_proposal_count?.toFixed(1) ?? 'N/A'})</p>
+                    <div className="text-center">
+                      <span className="text-xl font-semibold text-gray-700 dark:text-gray-300">{cancellationRateData?.proposal_count ?? 0}</span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Vorschläge</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">(Ø {avgCancellationStats?.avg_proposal_count?.toFixed(1) ?? 'N/A'})</p>
                     </div>
-                 </div>
+                  </div>
                 
-                <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Kurzfristigkeit der Abbrüche (Vergleich zum Durchschnitt)</h4>
-                 <div className="h-48"> 
+                  <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Kurzfristigkeit der Abbrüche</h4>
+                  <div className="h-48"> 
                     <ResponsiveContainer width="100%" height="100%">
-                       <BarChart data={getCancellationBucketChartData()} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                         <CartesianGrid strokeDasharray="3 3" />
-                         <XAxis type="number" unit="%" domain={[0, 100]}/>
-                         <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }}/>
-                         <Tooltip formatter={(value: number, name: string, props: any) => {
-                            if (name === 'Agentur') return [`${value.toFixed(1)}% (${props.payload.count} Fälle)`, name];
-                            if (name === 'Durchschnitt') return [`${value.toFixed(1)}%`, name];
-                            return [value, name];
-                         }}/>
-                         <Legend wrapperStyle={{ fontSize: '12px' }} />
-                         <Bar dataKey="avgPercentage" name="Durchschnitt" fill="#cbd5e1" radius={[0, 4, 4, 0]} barSize={10}/>
-                         <Bar dataKey="percentage" name="Agentur" label={{ position: 'right', formatter: (entry: any) => entry.label ?? '', fontSize: 10 }} radius={[0, 4, 4, 0]} barSize={10}>
-                           {getCancellationBucketChartData().map((entry, index) => (
-                             <Cell key={`cell-${index}`} fill={entry.color} />
-                           ))}
-                         </Bar>
-                     </BarChart>
-                   </ResponsiveContainer>
-                 </div>
-                <h4 className="font-medium text-md mt-4 mb-2 text-gray-700 dark:text-gray-200">Aufschlüsselung: Erst-/Folgeeinsatz</h4>
-                <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                  <li>Nur Erstanreise: {cancellationRateData.cancellation_buckets.nur_erstanreise.count} ({formatPercentage(cancellationRateData.cancellation_buckets.nur_erstanreise.count / cancellationRateData.proposal_count * 100)})</li>
-                  <li>Nur Folge/Wechsel: {cancellationRateData.cancellation_buckets.ohne_erstanreise.count} ({formatPercentage(cancellationRateData.cancellation_buckets.ohne_erstanreise.count / cancellationRateData.proposal_count * 100)})</li>
-                </ul>
-              </div>
-              <div>
-                <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Timing der Abbrüche (Median / AVG)</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Median Zeit von geplanter Anreise bis Abbruch:</p>
-                <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4">
-                  <li>Gesamt: {formatHours(timingData?.overall?.median_hours)}</li>
-                  <li>Ersteinsatz: {formatHours(timingData?.first_stays?.median_hours)}</li>
-                  <li>Folge/Wechsel: {formatHours(timingData?.followup_stays?.median_hours)}</li>
-                </ul>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">AVG Zeit von geplanter Anreise bis Abbruch:</p>
-                <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4">
-                  <li>Gesamt: {formatHours(timingData?.overall?.avg_hours)}</li>
-                  <li>Ersteinsatz: {formatHours(timingData?.first_stays?.avg_hours)}</li>
-                  <li>Folge/Wechsel: {formatHours(timingData?.followup_stays?.avg_hours)}</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {cancellationReasons && (
-          <div className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md">
-            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">
-              Abbruch-Gründe Analyse
-              <span className="ml-2 text-sm font-normal px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 rounded">In Entwicklung</span>
-            </h3>
-            <div className="mb-3 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded text-sm text-yellow-800 dark:text-yellow-200">
-              <strong>Hinweis:</strong> Diese Funktion befindet sich noch in der Entwicklung. Die angezeigten Daten sind Platzhalter und werden in Zukunft durch echte Analysedaten ersetzt.
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <div className="flex items-baseline space-x-4 mb-4">
-                  <div className="text-center">
-                    <span className="text-3xl font-bold text-gray-700 dark:text-gray-300">
-                      {cancellationReasons.total_cancellations}
-                    </span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Gesamte Abbrüche</p>
-                  </div>
-          </div>
-          
-                <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Warum brechen Agenturen ab?</h4>
-                <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={prepareReasonsData(cancellationReasons.cancellation_reasons, cancellationReasons.total_cancellations)}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={true}
-                        label={({ name, percentage }) => `${name}: ${percentage}`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {prepareReasonsData(cancellationReasons.cancellation_reasons, cancellationReasons.total_cancellations).map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value, name, props) => [`${value} (${props.payload.percentage})`, name]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-              
-              <div>
-                <h4 className="font-medium text-md mb-4 text-gray-700 dark:text-gray-200">Aufschlüsselung der Abbruch-Gründe</h4>
-                <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                  <thead>
-                    <tr>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Grund</th>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Anzahl</th>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Anteil</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                    {cancellationReasons.cancellation_reasons && Object.entries(cancellationReasons.cancellation_reasons).map(([reason, count], index) => (
-                      <tr key={index} className={index % 2 === 0 ? 'bg-gray-50 dark:bg-gray-900' : 'bg-white dark:bg-gray-800'}>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                          {reason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{count as number}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                          {formatPercentage(((count as number) / cancellationReasons.total_cancellations) * 100)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {earlyEndReasons && (
-          <div className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md">
-            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">
-              Vorzeitige Beendigungs-Gründe
-              <span className="ml-2 text-sm font-normal px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 rounded">In Entwicklung</span>
-            </h3>
-            <div className="mb-3 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded text-sm text-yellow-800 dark:text-yellow-200">
-              <strong>Hinweis:</strong> Diese Funktion befindet sich noch in der Entwicklung. Die angezeigten Daten sind Platzhalter und werden in Zukunft durch echte Analysedaten ersetzt.
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <div className="flex items-baseline space-x-4 mb-4">
-                  <div className="text-center">
-                    <span className="text-3xl font-bold text-gray-700 dark:text-gray-300">
-                      {earlyEndReasons.total_early_ends}
-                    </span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Gesamte vorzeitige Beendigungen</p>
+                      <BarChart data={getCancellationBucketChartData()} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" unit="%" domain={[0, 100]}/>
+                        <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }}/>
+                        <Tooltip formatter={(value: number, name: string, props: any) => {
+                          if (name === 'Agentur') return [`${value.toFixed(1)}% (${props.payload.count} Fälle)`, name];
+                          if (name === 'Durchschnitt') return [`${value.toFixed(1)}%`, name];
+                          return [value, name];
+                        }}/>
+                        <Legend wrapperStyle={{ fontSize: '12px' }} />
+                        <Bar dataKey="avgPercentage" name="Durchschnitt" fill="#cbd5e1" radius={[0, 4, 4, 0]} barSize={10}/>
+                        <Bar dataKey="percentage" name="Agentur" label={{ position: 'right', formatter: (entry: any) => entry.label ?? '', fontSize: 10 }} radius={[0, 4, 4, 0]} barSize={10}>
+                          {getCancellationBucketChartData().map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
-                
-                <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Warum beenden Pflegekräfte vorzeitig?</h4>
-                <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={prepareReasonsData(earlyEndReasons.early_end_reasons, earlyEndReasons.total_early_ends)}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={true}
-                        label={({ name, percentage }) => `${name}: ${percentage}`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {prepareReasonsData(earlyEndReasons.early_end_reasons, earlyEndReasons.total_early_ends).map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value, name, props) => [`${value} (${props.payload.percentage})`, name]} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                <div>
+                  <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Timing der Abbrüche (Median / AVG)</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Median Zeit von geplanter Anreise bis Abbruch:</p>
+                  <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4">
+                    <li>Gesamt: {formatHours(timingData?.overall?.median_hours)}</li>
+                    <li>Ersteinsatz: {formatHours(timingData?.first_stays?.median_hours)}</li>
+                    <li>Folge/Wechsel: {formatHours(timingData?.followup_stays?.median_hours)}</li>
+                  </ul>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">AVG Zeit von geplanter Anreise bis Abbruch:</p>
+                  <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4">
+                    <li>Gesamt: {formatHours(timingData?.overall?.avg_hours)}</li>
+                    <li>Ersteinsatz: {formatHours(timingData?.first_stays?.avg_hours)}</li>
+                    <li>Folge/Wechsel: {formatHours(timingData?.followup_stays?.avg_hours)}</li>
+                  </ul>
                 </div>
               </div>
-              
-              <div>
-                <h4 className="font-medium text-md mb-4 text-gray-700 dark:text-gray-200">Aufschlüsselung der Beendigungs-Gründe</h4>
-                <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                  <thead>
-                    <tr>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Grund</th>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Anzahl</th>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Anteil</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                    {earlyEndReasons.early_end_reasons && Object.entries(earlyEndReasons.early_end_reasons).map(([reason, count], index) => (
-                      <tr key={index} className={index % 2 === 0 ? 'bg-gray-50 dark:bg-gray-900' : 'bg-white dark:bg-gray-800'}>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                          {reason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{count as number}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                          {formatPercentage(((count as number) / earlyEndReasons.total_early_ends) * 100)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
         
         {showAgencyComparison && (
           <div className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md">
@@ -1335,10 +1097,10 @@ const QuotasPage: React.FC = () => {
                             stroke={['#FF5722', '#4CAF50', '#2196F3', '#FFC107'][index % 4]}
                             fill={['#FF5722', '#4CAF50', '#2196F3', '#FFC107'][index % 4]}
                             fillOpacity={0.3}
-                />
+                          />
                         ))}
                       
-                <Legend />
+                      <Legend />
                       <Tooltip formatter={(value) => `${value}%`} />
                     </RadarChart>
                   </ResponsiveContainer>
@@ -1352,13 +1114,13 @@ const QuotasPage: React.FC = () => {
                     <div key={index} className="mb-2">
                       <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{item.metric}</p>
                       <div className="h-10">
-                        <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             layout="vertical"
                             data={item.data}
                             margin={{ top: 0, right: 0, left: 120, bottom: 0 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" />
+              >
+                <CartesianGrid strokeDasharray="3 3" />
                             <XAxis type="number" domain={[0, 100]} unit="%" />
                             <YAxis dataKey="agency_name" type="category" width={120} tick={{ fontSize: 11 }} />
                             <Tooltip formatter={(value) => `${value}%`} />
@@ -1369,7 +1131,7 @@ const QuotasPage: React.FC = () => {
                                   fill={entry.is_selected ? '#8884d8' : ['#FF5722', '#4CAF50', '#2196F3', '#FFC107'][i % 4]} 
                                   stroke={entry.is_selected ? '#6a5cb6' : 'none'}
                                   strokeWidth={entry.is_selected ? 2 : 0}
-                />
+                                />
                               ))}
                             </Bar>
                           </BarChart>
@@ -1378,9 +1140,9 @@ const QuotasPage: React.FC = () => {
         </div>
                   ))}
                 </div>
-          </div>
-        </div>
-        
+              </div>
+            </div>
+            
             <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm text-gray-600 dark:text-gray-300">
               <p className="font-medium text-md mb-1">Interpretationshilfe:</p>
               <ul className="list-disc pl-5 space-y-1">
@@ -1392,7 +1154,7 @@ const QuotasPage: React.FC = () => {
           </div>
         )}
         
-        <div className="dashboard-card mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md">
+        <div className="dashboard-card mb-8">
           <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Detaillierte KPIs</h2>
           
           <div className="overflow-x-auto">
@@ -1401,17 +1163,17 @@ const QuotasPage: React.FC = () => {
                 <tr>
                   <th>Kennzahl</th>
                   <th>{selectedAgency.agency_name}</th>
-                  <th>Durchschnitt</th>
+                  <th>Branchendurchschnitt</th>
                   <th>Differenz</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td>Reservierungsrate</td>
-                  <td>{formatPercentage((selectedAgencyScatterData?.reservation_rate || 0.45) * 100)}</td>
-                  <td>{formatPercentage((allQuotasData?.industry_average?.reservation_rate || 0.42) * 100)}</td>
+                  <td>{formatPercentage((selectedAgencyScatterData?.reservation_rate || 0.65) * 100)}</td>
+                  <td>{formatPercentage((allQuotasData?.industry_average?.reservation_rate || 0.62) * 100)}</td>
                   <td className={selectedAgencyScatterData?.reservation_rate > allQuotasData?.industry_average?.reservation_rate ? 'text-green-600' : 'text-red-600'}>
-                    {formatPercentage(((selectedAgencyScatterData?.reservation_rate || 0.45) - (allQuotasData?.industry_average?.reservation_rate || 0.42)) * 100)}
+                    {formatPercentage(((selectedAgencyScatterData?.reservation_rate || 0.65) - (allQuotasData?.industry_average?.reservation_rate || 0.62)) * 100)}
                   </td>
                 </tr>
                 <tr>
