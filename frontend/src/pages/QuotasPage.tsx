@@ -178,26 +178,33 @@ const QuotasPage: React.FC = () => {
         console.log("-------- HISTORICAL DATA REQUEST --------");
         console.log(`Aktueller Zeitraum: ${timePeriod} (${currStartDate} - ${currEndDate})`);
         console.log(`Ausgewählter Vergleichszeitraum: ${historicalPeriod}`);
-        console.log(`Historischer Zeitraum: ${histStartDate} - ${histEndDate}`);
+        console.log(`Berechneter historischer Zeitraum: ${histStartDate} - ${histEndDate}`);
         
-        // Das Backend unterstützt aktuell nur vordefinierte Zeiträume
-        // Als Workaround verwenden wir den best-match API-Zeitraum
-        const historicalTimePeriod = getHistoricalTimePeriod(timePeriod, historicalPeriod);
-        console.log(`Tatsächlich verwendeter API-Zeitraum: ${historicalTimePeriod}`);
-        
-        // Die normale API mit historischem Zeitraum aufrufen
-        console.log(`Fetching data for agency ${selectedAgency.agency_id} with time period: ${historicalTimePeriod}`);
-        const historicalData = await apiService.getAgencyQuotas(
-          selectedAgency.agency_id, 
-          historicalTimePeriod
-        );
-        
-        // In Zukunft könnte man hier für größere Präzision benutzerdefinierte Zeiträume nutzen:
-        // const historicalData = await apiService.getAgencyQuotasWithCustomDates(
-        //   selectedAgency.agency_id, 
-        //   histStartDate,
-        //   histEndDate
-        // );
+        // Versuche, die API mit benutzerdefinierten Datumsparametern aufzurufen
+        let historicalData;
+        try {
+          console.log(`Fetching data for agency ${selectedAgency.agency_id} with custom dates: ${histStartDate} to ${histEndDate}`);
+          historicalData = await apiService.getAgencyQuotasWithCustomDates(
+            selectedAgency.agency_id, 
+            histStartDate,
+            histEndDate
+          );
+          console.log("Successfully used custom date parameters!");
+        } catch (customDateError) {
+          // Fallback auf vordefinierte Zeiträume, wenn das Backend benutzerdefinierte Datumsparameter noch nicht unterstützt
+          console.warn("Custom date parameters not supported by backend, falling back to predefined periods:", customDateError);
+          
+          // Als Workaround verwenden wir den best-match API-Zeitraum
+          const historicalTimePeriod = getHistoricalTimePeriod(timePeriod, historicalPeriod);
+          console.log(`Falling back to predefined API time period: ${historicalTimePeriod}`);
+          
+          // Die normale API mit historischem Zeitraum aufrufen
+          historicalData = await apiService.getAgencyQuotas(
+            selectedAgency.agency_id, 
+            historicalTimePeriod
+          );
+          console.log("Used fallback predefined time period");
+        }
         
         console.log("Received historical data:", historicalData);
         console.log("Selected agency in historical data:", historicalData?.selected_agency);
@@ -1314,9 +1321,23 @@ const QuotasPage: React.FC = () => {
     switch (historicalTimePeriod) {
       case 'same_quarter_last_year':
         // Wir wollen genau das gleiche Quartal, aber ein Jahr früher
-        const quarterLastYear = new Date(now.getFullYear() - 1, (currentQuarter - 1) * 3, 1);
-        startDate = getQuarterStart(quarterLastYear);
-        endDate = getQuarterEnd(quarterLastYear);
+        if (timePeriod === 'last_quarter') {
+          // Wenn "letztes Quartal" ausgewählt ist, nehmen wir das gleiche Quartal im Vorjahr
+          const lastQuarter = subQuarters(now, 1);
+          const lastQuarterLastYear = subYears(lastQuarter, 1);
+          startDate = getQuarterStart(lastQuarterLastYear);
+          endDate = getQuarterEnd(lastQuarterLastYear);
+        } else if (timePeriod === 'current_quarter') {
+          // Wenn "aktuelles Quartal" ausgewählt ist, nehmen wir das gleiche Quartal im Vorjahr
+          const currentQuarterLastYear = subYears(now, 1);
+          startDate = getQuarterStart(currentQuarterLastYear);
+          endDate = getQuarterEnd(currentQuarterLastYear);
+        } else {
+          // Standardfall
+          const quarterLastYear = new Date(now.getFullYear() - 1, (currentQuarter - 1) * 3, 1);
+          startDate = getQuarterStart(quarterLastYear);
+          endDate = getQuarterEnd(quarterLastYear);
+        }
         break;
       case 'two_years_ago':
         // Zwei Jahre zurück

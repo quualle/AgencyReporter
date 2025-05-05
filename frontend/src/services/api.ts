@@ -27,6 +27,8 @@ export interface ComparisonData {
   selected_agency: any;
   all_agencies: any[];
   industry_average: any;
+  comparison_agency?: any; // Für den Vergleich mit einer spezifischen Agentur
+  historical_data?: any; // Für den historischen Vergleich
 }
 
 // API functions
@@ -45,6 +47,12 @@ export const apiService = {
   // Quotas (KPIs)
   getAgencyQuotas: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
     const response = await api.get(`/quotas/${id}/all?time_period=${timePeriod}`);
+    return response.data;
+  },
+  
+  // Quotas (KPIs) mit benutzerdefinierten Datumsparametern
+  getAgencyQuotasWithCustomDates: async (id: string, startDate: string, endDate: string): Promise<any> => {
+    const response = await api.get(`/quotas/${id}/all?start_date=${startDate}&end_date=${endDate}`);
     return response.data;
   },
 
@@ -100,6 +108,32 @@ export const apiService = {
   // Comparison (Simplified Average - potentially deprecate or refine later)
   compareAgencyReactionTimes: async (id: string, timePeriod: string = 'last_quarter'): Promise<ComparisonData> => {
     const response = await api.post('/reaction_times/compare', { agency_id: id, time_period: timePeriod });
+    return response.data;
+  },
+
+  // Neue Vergleichsfunktionen
+  compareAgencyWithAgency: async (id: string, compareAgencyId: string, timePeriod: string = 'last_quarter'): Promise<ComparisonData> => {
+    const response = await api.post('/quotas/compare', { 
+      agency_id: id, 
+      compare_agency_id: compareAgencyId, 
+      time_period: timePeriod,
+      comparison_type: 'agency' 
+    });
+    return response.data;
+  },
+
+  compareAgencyWithHistorical: async (id: string, currentPeriod: string = 'last_quarter', historicalPeriod: string = 'last_year'): Promise<ComparisonData> => {
+    const response = await api.post('/quotas/compare', { 
+      agency_id: id, 
+      current_period: currentPeriod,
+      historical_period: historicalPeriod,
+      comparison_type: 'historical'
+    });
+    return response.data;
+  },
+
+  getAgencyHistoricalData: async (id: string, periods: string[] = ['last_quarter', 'last_year']): Promise<any> => {
+    const response = await api.get(`/quotas/${id}/historical?periods=${periods.join(',')}`);
     return response.data;
   },
 
