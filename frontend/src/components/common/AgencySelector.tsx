@@ -28,10 +28,14 @@ const AgencySelector: React.FC = () => {
         
         setAgencies(agenciesWithStatus);
         
-        // Auto-select the first active agency if none is selected
+        // Standardmäßig Senioport auswählen oder zumindest eine aktive Agentur
         if (!selectedAgency && agenciesWithStatus.length > 0) {
+          // Senioport hat die agency_id 649aa2dc2d847c6e7cbe0b56
+          const senioport = agenciesWithStatus.find(a => a.agency_id === '649aa2dc2d847c6e7cbe0b56');
           const firstActive = agenciesWithStatus.find(a => a.is_active_recently);
-          setSelectedAgency(firstActive || agenciesWithStatus[0]); // Wähle die erste aktive, sonst die erste überhaupt
+          
+          // Priorisiere Senioport > aktive Agentur > erste Agentur in der Liste
+          setSelectedAgency(senioport || firstActive || agenciesWithStatus[0]);
         }
         
         setError(null);
