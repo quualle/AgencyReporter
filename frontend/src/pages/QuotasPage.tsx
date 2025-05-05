@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../store/appStore';
-import apiService from '../services/api';
+import apiService, { Agency } from '../services/api';
 import Loading from '../components/common/Loading';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, Cell, PieChart, Pie, LineChart, Line, ComposedChart, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
@@ -45,9 +45,33 @@ interface AgencyComparisonItem {
   is_selected?: boolean;
 }
 
+// Info-Tooltip Komponente für die Funnelstufen
+interface InfoTooltipProps {
+  text: string;
+}
+
+// Vergleichstypen für das Dropdown
+type ComparisonType = 'average' | 'historical' | 'agency';
+
+// Historische Perioden für den Vergleich
+type HistoricalPeriod = 'last_quarter' | 'last_year' | 'last_6months';
+
+const InfoTooltip: React.FC<InfoTooltipProps> = ({ text }) => {
+  return (
+    <div className="relative inline-block ml-1 cursor-help group">
+      <span className="bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-full w-4 h-4 inline-flex items-center justify-center text-xs font-bold">i</span>
+      <div className="opacity-0 invisible group-hover:opacity-100 group-hover:visible absolute z-10 w-64 bg-gray-800 text-white text-xs rounded py-2 px-3 left-1/2 -translate-x-1/2 bottom-full mb-1 transition-opacity duration-200 shadow-lg">
+        {text}
+        <div className="absolute border-4 border-transparent border-t-gray-800 -bottom-2 left-1/2 -translate-x-1/2"></div>
+      </div>
+    </div>
+  );
+};
+
 const QuotasPage: React.FC = () => {
   const { selectedAgency, timePeriod } = useAppStore();
   
+  // Bestehende States
   const [allQuotasData, setAllQuotasData] = useState<any | null>(null);
   const [cancellationRateData, setCancellationRateData] = useState<any>(null);
   const [timingData, setTimingData] = useState<any>(null);
@@ -64,6 +88,150 @@ const QuotasPage: React.FC = () => {
   const [comparisonAgencies, setComparisonAgencies] = useState<AgencyComparisonItem[]>([]);
   const [selectedComparisonAgencies, setSelectedComparisonAgencies] = useState<string[]>([]);
   
+  // Neue States für den erweiterten Vergleich
+  const [comparisonType, setComparisonType] = useState<ComparisonType>('average');
+  const [selectedComparisonAgency, setSelectedComparisonAgency] = useState<string>('');
+  const [historicalPeriod, setHistoricalPeriod] = useState<HistoricalPeriod>('last_quarter');
+  const [comparisonAgencyData, setComparisonAgencyData] = useState<any>(null);
+  const [historicalComparisonData, setHistoricalComparisonData] = useState<any>(null);
+  const [allAvailableAgencies, setAllAvailableAgencies] = useState<Agency[]>([]);
+  
+  // Neuer State für historische Werte (Wert B)
+  const [historicalQuotasData, setHistoricalQuotasData] = useState<any | null>(null);
+  
+  // Effekt zum Laden der verfügbaren Agenturen
+  useEffect(() => {
+    const fetchAgencies = async () => {
+      try {
+        const agenciesData = await apiService.getAgencies();
+        setAllAvailableAgencies(agenciesData);
+      } catch (err) {
+        console.error('Error fetching available agencies:', err);
+      }
+    };
+    
+    fetchAgencies();
+  }, []);
+  
+  // Hilfsfunktion, um das korrekte historische Zeitintervall basierend auf dem aktuellen Zeitraum zu bestimmen
+  const getHistoricalTimePeriod = (currentPeriod: string, comparisonPeriod: HistoricalPeriod): string => {
+    // Aktuelle Perioden-Logik
+    switch(currentPeriod) {
+      case 'last_month':
+        switch(comparisonPeriod) {
+          case 'last_quarter':
+            return 'last_quarter'; // Wenn aktuell der letzte Monat, vergleichen mit dem letzten Quartal
+          case 'last_6months':
+            return 'last_6months'; // Wenn aktuell der letzte Monat, vergleichen mit den letzten 6 Monaten
+          case 'last_year':
+          default:
+            return 'last_year'; // Wenn aktuell der letzte Monat, vergleichen mit dem letzten Jahr
+        }
+      
+      case 'last_quarter':
+        switch(comparisonPeriod) {
+          case 'last_quarter':
+            // Eigentlich bräuchten wir hier "previous_quarter", aber das ist noch nicht implementiert
+            // Als Workaround nehmen wir vorerst das letzte Jahr
+            return 'last_year';
+          case 'last_6months':
+            return 'last_6months';
+          case 'last_year':
+          default:
+            return 'last_year';
+        }
+      
+      case 'last_year':
+        switch(comparisonPeriod) {
+          case 'last_quarter':
+            // Wenn aktuell das letzte Jahr angeschaut wird, macht ein Vergleich mit dem letzten Quartal wenig Sinn
+            // Stattdessen nehmen wir hier all_time
+            return 'all_time';
+          case 'last_6months':
+            // Auch hier macht ein Vergleich mit 6 Monaten wenig Sinn, daher all_time
+            return 'all_time';
+          case 'last_year':
+          default:
+            // Eigentlich bräuchten wir hier "previous_year", aber das ist noch nicht implementiert
+            // Als Workaround nehmen wir vorerst all_time
+            return 'all_time';
+        }
+      
+      case 'all_time':
+      default:
+        // Bei "all_time" gibt es keinen sinnvollen Vergleich, daher immer das letzte Jahr nehmen
+        return 'last_year';
+    }
+  };
+
+  // Effekt zum Laden der historischen Daten (Wert B) für den Vergleich mit sich selbst
+  useEffect(() => {
+    const fetchHistoricalQuotasData = async () => {
+      if (!selectedAgency || comparisonType !== 'historical') return;
+      
+      try {
+        setIsLoading(true);
+        
+        // Das Backend unterstützt aktuell nur last_quarter, last_month, last_year und all_time
+        // Wir ermitteln das passende historische Zeitintervall basierend auf der aktuellen Auswahl
+        const historicalTimePeriod = getHistoricalTimePeriod(timePeriod, historicalPeriod);
+        
+        console.log(`Aktueller Zeitraum: ${timePeriod}, Vergleichszeitraum: ${historicalPeriod}`);
+        console.log(`Fetching historical data with time period: ${historicalTimePeriod}`);
+        
+        // Die normale API mit historischem Zeitraum aufrufen
+        const historicalData = await apiService.getAgencyQuotas(
+          selectedAgency.agency_id, 
+          historicalTimePeriod
+        );
+        
+        setHistoricalQuotasData(historicalData);
+        console.log("Historical Quotas Data:", historicalData);
+      } catch (err) {
+        console.error('Error fetching historical data:', err);
+        setError(`Fehler beim Laden der historischen Daten für den Zeitraum ${historicalPeriod}`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    if (comparisonType === 'historical') {
+      fetchHistoricalQuotasData();
+    } else {
+      // Zurücksetzen der historischen Daten, wenn ein anderer Vergleichstyp ausgewählt ist
+      setHistoricalQuotasData(null);
+    }
+  }, [selectedAgency, comparisonType, historicalPeriod, timePeriod]);
+  
+  // Effekt zur Ladung der Vergleichsagentur-Daten
+  useEffect(() => {
+    const fetchComparisonAgencyData = async () => {
+      if (!selectedAgency || comparisonType !== 'agency' || !selectedComparisonAgency) return;
+      
+      try {
+        setIsLoading(true);
+        
+        // Normale API für die Vergleichsagentur aufrufen
+        const data = await apiService.getAgencyQuotas(selectedComparisonAgency, timePeriod);
+        setComparisonAgencyData(data);
+        console.log("Comparison Agency Data:", data);
+      } catch (err) {
+        console.error('Error fetching comparison agency data:', err);
+        setError(`Fehler beim Laden der Daten für die Vergleichsagentur`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    if (comparisonType === 'agency' && selectedComparisonAgency) {
+      fetchComparisonAgencyData();
+    } else {
+      // Zurücksetzen der Vergleichsagentur-Daten, wenn ein anderer Vergleichstyp ausgewählt ist
+      setComparisonAgencyData(null);
+    }
+  }, [selectedAgency, comparisonType, selectedComparisonAgency, timePeriod]);
+  
+  // Bestehender Effekt zur Datenladung
   useEffect(() => {
     const fetchData = async () => {
       if (!selectedAgency) return;
@@ -89,9 +257,7 @@ const QuotasPage: React.FC = () => {
         ]);
 
         console.log("API Response - Quotas Data:", quotasData);
-        console.log("API Response - Quotas Data (Detail):", JSON.stringify(quotasData, null, 2));
-        console.log("Selected Agency Data Structure:", JSON.stringify(quotasData?.selected_agency, null, 2));
-
+        
         setAllQuotasData(quotasData);
         setCancellationRateData(cancellationRate);
         setTimingData(arrivalTiming);
@@ -99,20 +265,33 @@ const QuotasPage: React.FC = () => {
         setCancellationReasons(cancellationReasonsData);
         setEarlyEndReasons(earlyEndReasonsData);
 
-        // Mock historical and period comparison data
-        // In a real implementation, these would be API calls
-        const mockHistoricalData = {
-          periods: ['Q1', 'Q2', 'Q3', 'Q4'],
-          metrics: {
-            reservation_rate: [0.55, 0.58, 0.62, 0.65],
-            fulfillment_rate: [0.72, 0.70, 0.75, 0.78],
-            cancellation_rate: [0.15, 0.18, 0.12, 0.10],
-            start_rate: [0.85, 0.82, 0.88, 0.90],
-            completion_rate: [0.78, 0.75, 0.82, 0.85],
-            early_end_rate: [0.22, 0.25, 0.18, 0.15]
-          }
-        };
+        // Historische Daten für Trends laden
+        try {
+          const historicalQuotasData = await apiService.getAgencyHistoricalData(
+            selectedAgency.agency_id, 
+            ['last_quarter', 'last_year', 'last_6months']
+          );
+          
+          // Mock-Daten ersetzen, wenn echte Daten verfügbar sind
+          setHistoricalData(historicalQuotasData || {
+            periods: ['Q1', 'Q2', 'Q3', 'Q4'],
+            metrics: {
+              reservation_rate: [0.55, 0.58, 0.62, 0.65],
+              fulfillment_rate: [0.72, 0.70, 0.75, 0.78],
+              cancellation_rate: [0.15, 0.18, 0.12, 0.10],
+              start_rate: [0.85, 0.82, 0.88, 0.90],
+              completion_rate: [0.78, 0.75, 0.82, 0.85],
+              early_end_rate: [0.22, 0.25, 0.18, 0.15]
+            }
+          });
+        } catch (err) {
+          console.error('Error fetching historical data:', err);
+          // Weiter mit Mock-Daten als Fallback
+        }
+
+        // Restliche Mock-Daten initialisierung...
         
+        // Conversion of existing mock data loading
         const mockPeriodComparisonData = {
           current_period: 'Q4',
           previous_period: 'Q3',
@@ -127,9 +306,9 @@ const QuotasPage: React.FC = () => {
           }
         };
         
-        setHistoricalData(mockHistoricalData);
         setPeriodComparisonData(mockPeriodComparisonData);
 
+        // Rest der Mock-Daten für Vergleichsagenturen
         // Mock data for agency comparison
         const mockComparisonAgencies: AgencyComparisonItem[] = [
           {
@@ -204,6 +383,21 @@ const QuotasPage: React.FC = () => {
     fetchData();
   }, [selectedAgency, timePeriod]);
   
+  // Handler für Änderungen am Vergleichstyp
+  const handleComparisonTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setComparisonType(e.target.value as ComparisonType);
+  };
+  
+  // Handler für Auswahl der Vergleichsagentur
+  const handleComparisonAgencyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedComparisonAgency(e.target.value);
+  };
+  
+  // Handler für Auswahl der historischen Periode
+  const handleHistoricalPeriodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setHistoricalPeriod(e.target.value as HistoricalPeriod);
+  };
+  
   if (isLoading) {
     return <Loading message="Laden der KPI-Daten..." />;
   }
@@ -223,6 +417,57 @@ const QuotasPage: React.FC = () => {
     );
   }
   
+  // Hilfsfunktion, um die richtigen Vergleichsdaten basierend auf dem Typ zu erhalten
+  const getComparisonData = () => {
+    switch (comparisonType) {
+      case 'agency':
+        return comparisonAgencyData?.selected_agency || null;
+      case 'historical':
+        return historicalQuotasData?.selected_agency || null;
+      case 'average':
+      default:
+        return allQuotasData?.industry_average || null;
+    }
+  };
+  
+  // Hilfsfunktion zur besseren Lesbarkeit - gibt entweder den Vergleichswert oder den Durchschnittswert zurück
+  const getComparisonValue = (fieldName: string) => {
+    const compData = getComparisonData();
+    if (comparisonType === 'historical' && compData) {
+      return compData[fieldName];
+    } else if (comparisonType === 'agency' && compData) {
+      return compData[fieldName];
+    } else {
+      // Fallback auf Durchschnitt wenn keine Vergleichsdaten vorhanden oder Durchschnitt ausgewählt
+      return allQuotasData?.industry_average?.[fieldName];
+    }
+  };
+
+  // Funktion, um den Vergleichslabel basierend auf dem ausgewählten Typ anzuzeigen
+  const getComparisonLabel = (): string => {
+    switch (comparisonType) {
+      case 'agency':
+        if (!comparisonAgencyData?.selected_agency?.name) {
+          return 'Vergleichsagentur';
+        }
+        return comparisonAgencyData.selected_agency.name;
+      case 'historical':
+        switch (historicalPeriod) {
+          case 'last_quarter':
+            return 'Vorquartal';
+          case 'last_year':
+            return 'Vorjahr';
+          case 'last_6months':
+            return 'Letzte 6 Monate';
+          default:
+            return 'Vorperiode';
+        }
+      case 'average':
+      default:
+        return 'Durchschnitt';
+    }
+  };
+  
   // Prepare data for scatter plot
   const scatterData: ScatterDataPoint[] = [];
   
@@ -235,7 +480,7 @@ const QuotasPage: React.FC = () => {
       if (agency.agency_id !== selectedAgency.agency_id) {
         scatterData.push({
           x: (agency.reservation_rate || 0) * 100,
-          y: (agency.fulfillment_rate || 0) * 100,
+          y: (agency.reservation_fulfillment_rate || 0) * 100,
           z: agency.reservation_count || 1,
           name: agency.agency_name,
           agency_id: agency.agency_id,
@@ -248,7 +493,7 @@ const QuotasPage: React.FC = () => {
     if (selectedAgencyScatterData && selectedAgency) {
       scatterData.push({
         x: (selectedAgencyScatterData.reservation_rate || 0) * 100,
-        y: (selectedAgencyScatterData.fulfillment_rate || 0) * 100,
+        y: (selectedAgencyScatterData.reservation_fulfillment_rate || 0) * 100,
         z: selectedAgencyScatterData.reservation_count || 1,
         name: selectedAgency.agency_name,
         agency_id: selectedAgency.agency_id,
@@ -260,7 +505,7 @@ const QuotasPage: React.FC = () => {
     if (allQuotasData.industry_average) {
       scatterData.push({
         x: (allQuotasData.industry_average.reservation_rate || 0) * 100,
-        y: (allQuotasData.industry_average.fulfillment_rate || 0) * 100,
+        y: (allQuotasData.industry_average.reservation_fulfillment_rate || 0) * 100,
         z: allQuotasData.industry_average.avg_reservation_count || 1,
         name: "Branchendurchschnitt",
         agency_id: "average",
@@ -332,11 +577,46 @@ const QuotasPage: React.FC = () => {
     if (!allQuotasData?.selected_agency) {
       // Sample data for development/testing
       return [
-        { name: 'Ausgeschriebene Stellen', value: 100, fill: '#4F86C6', fullValue: 100, percentage: '100%' },
-        { name: 'Reservierte Stellen', value: 65, fill: '#6A9ADB', fullValue: 100, percentage: '65.0%' },
-        { name: 'Personalvorschläge', value: 45, fill: '#65B2A9', fullValue: 100, percentage: '45.0%' },
-        { name: 'Angetretene Einsätze', value: 35, fill: '#4CAF50', fullValue: 100, percentage: '35.0%' },
-        { name: 'Abgeschlossene Einsätze', value: 30, fill: '#2E7D32', fullValue: 100, percentage: '30.0%' }
+        { 
+          name: 'Ausgeschriebene Stellen', 
+          description: "Zeigt ALLE im gewählten Zeitraum ausgeschriebenen Stellen",
+          value: 100, 
+          fill: '#4F86C6', 
+          fullValue: 100, 
+          percentage: '100%' 
+        },
+        { 
+          name: 'Reservierte Stellen', 
+          description: "Zeigt die Anzahl der Stellen, die von der gewählten Agentur im gewählten Zeitraum reserviert wurden",
+          value: 65, 
+          fill: '#6A9ADB', 
+          fullValue: 100, 
+          percentage: '65.0%' 
+        },
+        { 
+          name: 'Stellen mit PV', 
+          description: "Zeigt die Anzahl der Stellen, die von der gewählten Agentur im gewählten Zeitraum einen oder mehrere Personalvorschläge erhalten haben",
+          value: 45, 
+          fill: '#65B2A9', 
+          fullValue: 100, 
+          percentage: '45.0%' 
+        },
+        { 
+          name: 'Angetretene Ersteinsätze', 
+          description: "Zeigt die Anzahl der Stellen, die zum ARRIVAL Datum des CareStay Immernoch bestätigt und NICHT Abgebrochen sind",
+          value: 35, 
+          fill: '#4CAF50', 
+          fullValue: 100, 
+          percentage: '35.0%' 
+        },
+        { 
+          name: 'Abgeschlossene Einsätze', 
+          description: "Zeigt die Anzahl der Stellen, 1) als Angetreten gezählt wurden UND dessen Abreisedatum nicht signifikant vorgezogen wurde (2 Wochen toleranz. Alle Stellen die bei der Abreise um mehr als 2 Wochen gekürzt wurden, fallen raus",
+          value: 30, 
+          fill: '#2E7D32', 
+          fullValue: 100, 
+          percentage: '30.0%' 
+        }
       ];
     }
 
@@ -362,19 +642,19 @@ const QuotasPage: React.FC = () => {
     // Seed für die aktuelle Agentur
     const seed = generateSeed(selectedAgency.agency_id);
     
-    // Bestimme die tatsächliche Anzahl der Ausschreibungen oder generiere realistische Werte
-    // Die total_posting-Zahlen für verschiedene Agenturen sollten im Bereich 50-250 liegen
-    let total_postings;
+    // Direkt die vom Backend gelieferte Gesamtzahl der Ausschreibungen verwenden
+    let total_postings = sa.total_postings;
     
-    if (sa.total_postings !== undefined) {
-      // Echte Daten aus der API
-      total_postings = sa.total_postings;
-    } else if (sa.total_reservations !== undefined && sa.reservation_rate && sa.reservation_rate > 0) {
+    // Fallback, wenn total_postings nicht verfügbar ist
+    if (total_postings === undefined) {
+      console.warn("total_postings nicht verfügbar, verwende Fallback-Mechanismus");
+      if (sa.total_reservations !== undefined && sa.reservation_rate && sa.reservation_rate > 0) {
       // Berechnet aus anderen echten Daten
       total_postings = Math.round(sa.total_reservations / sa.reservation_rate);
     } else {
       // Generiere realistische aber unterschiedliche Werte für verschiedene Agenturen
       total_postings = generateRandomValue(50, 250, seed);
+      }
     }
     
     // Berechne die weiteren Werte in der Funnel-Kette
@@ -400,7 +680,10 @@ const QuotasPage: React.FC = () => {
     }
     
     let total_starts;
-    if (sa.total_starts !== undefined) {
+    if (sa.arrival_metrics?.first_stays?.arrived_count !== undefined) {
+      // Nur angetretene Ersteinsätze verwenden, keine Folgeeinsätze
+      total_starts = sa.arrival_metrics.first_stays.arrived_count;
+    } else if (sa.total_starts !== undefined) {
       total_starts = sa.total_starts;
     } else {
       // Verschiedene Antrittsraten: ca. 75-95% der Vorschläge
@@ -422,12 +705,14 @@ const QuotasPage: React.FC = () => {
       total_reservations,
       total_proposals,
       total_starts,
-      total_completions
+      total_completions,
+      first_stays_arrived: sa.arrival_metrics?.first_stays?.arrived_count
     });
     
     return [
       { 
         name: 'Ausgeschriebene Stellen', 
+        description: "Zeigt ALLE im gewählten Zeitraum ausgeschriebenen Stellen",
         value: total_postings,
         fill: '#4F86C6',
         fullValue: total_postings,
@@ -435,20 +720,23 @@ const QuotasPage: React.FC = () => {
       },
       { 
         name: 'Reservierte Stellen', 
+        description: "Zeigt die Anzahl der Stellen, die von der gewählten Agentur im gewählten Zeitraum reserviert wurden",
         value: total_reservations,
         fill: '#6A9ADB',
         fullValue: total_postings,
         percentage: formatPercentage((total_reservations / total_postings) * 100)
       },
       { 
-        name: 'Personalvorschläge', 
+        name: 'Stellen mit PV', 
+        description: "Zeigt die Anzahl der Stellen, die von der gewählten Agentur im gewählten Zeitraum einen oder mehrere Personalvorschläge erhalten haben",
         value: total_proposals,
         fill: '#65B2A9',
         fullValue: total_postings,
         percentage: formatPercentage((total_proposals / total_postings) * 100)
       },
       { 
-        name: 'Angetretene Einsätze', 
+        name: 'Angetretene Ersteinsätze', 
+        description: "Zeigt die Anzahl der Stellen, die zum ARRIVAL Datum des CareStay Immernoch bestätigt und NICHT Abgebrochen sind",
         value: total_starts,
         fill: '#4CAF50',
         fullValue: total_postings,
@@ -456,6 +744,7 @@ const QuotasPage: React.FC = () => {
       },
       { 
         name: 'Abgeschlossene Einsätze', 
+        description: "Zeigt die Anzahl der Stellen, 1) als Angetreten gezählt wurden UND dessen Abreisedatum nicht signifikant vorgezogen wurde (2 Wochen toleranz. Alle Stellen die bei der Abreise um mehr als 2 Wochen gekürzt wurden, fallen raus",
         value: total_completions,
         fill: '#2E7D32',
         fullValue: total_postings,
@@ -469,67 +758,260 @@ const QuotasPage: React.FC = () => {
     // If no API data available, use sample data for development/testing
     if (!allQuotasData?.selected_agency) {
       return [
-        { stage: 'Reserviert', value: 65, fill: '#4F86C6', percentage: '65.0%' },
-        { stage: 'Reserviert und Vorschlag', value: 45, fill: '#65B2A9', percentage: '69.2%' },
-        { stage: 'Anreise erfolgreich', value: 35, fill: '#4CAF50', percentage: '77.8%' },
-        { stage: 'Einsatz vollständig durchgezogen', value: 30, fill: '#2E7D32', percentage: '85.7%' },
+        { stage: 'Reserviert', value: 65, fill: '#4F86C6', percentage: '65.0%', conversionRate: '65.0%', totalPercentage: '65.0%', avgTotalPercentage: '58.0%', avgConversionRate: '58.0%' },
+        { stage: 'Reserviert und Vorschlag', value: 45, fill: '#65B2A9', percentage: '69.2%', conversionRate: '69.2%', totalPercentage: '45.0%', avgTotalPercentage: '38.0%', avgConversionRate: '65.5%' },
+        { stage: 'Anreise erfolgreich (Ersteinsätze)', value: 35, fill: '#4CAF50', percentage: '77.8%', conversionRate: '77.8%', totalPercentage: '35.0%', avgTotalPercentage: '28.0%', avgConversionRate: '73.7%' },
+        { stage: 'Einsatz vollständig durchgezogen', value: 30, fill: '#2E7D32', percentage: '85.7%', conversionRate: '85.7%', totalPercentage: '30.0%', avgTotalPercentage: '22.0%', avgConversionRate: '78.6%' },
       ];
     }
     
     const sa = allQuotasData.selected_agency;
+    const ia = allQuotasData.industry_average || {};
     
-    // Add total_postings if not available in the data
-    if (sa.total_postings === undefined) {
-      // Estimate total postings based on reservations and reservation rate
-      // or use a default value
-      if (sa.total_reservations && sa.reservation_rate) {
-        sa.total_postings = Math.round(sa.total_reservations / sa.reservation_rate);
+    // Use consistent seeding for potential fallbacks
+    const generateSeed = (agencyId: string): number => {
+      let seed = 0;
+      for (let i = 0; i < agencyId.length; i++) {
+        seed += agencyId.charCodeAt(i);
+      }
+      return seed;
+    };
+    const generateRandomValue = (min: number, max: number, seed: number): number => {
+      const x = Math.sin(seed) * 10000;
+      const rand = x - Math.floor(x);
+      return Math.floor(min + rand * (max - min));
+    };
+    const seed = generateSeed(selectedAgency.agency_id);
+
+    // SELECTED AGENCY DATA
+    // Ensure total_postings is available, using fallback if necessary
+    let total_postings = sa.total_postings;
+    if (total_postings === undefined) {
+      if (sa.total_reservations !== undefined && sa.reservation_rate && sa.reservation_rate > 0) {
+        total_postings = Math.round(sa.total_reservations / sa.reservation_rate);
       } else {
-        sa.total_postings = 100; // Default fallback
+        total_postings = generateRandomValue(50, 250, seed); 
       }
     }
+    total_postings = total_postings || 100; // Final fallback
     
-    const total_postings = sa.total_postings || 100;
-    const reservations = Math.round(total_postings * (sa.reservation_rate || 0));
-    const not_reserved = total_postings - reservations;
+    // Calculate reservations
+    let reservations = sa.total_reservations;
+    if (reservations === undefined) {
+      const reservationRate = sa.reservation_rate || 0.45 + (generateRandomValue(0, 30, seed + 1) / 100);
+      reservations = Math.round(total_postings * reservationRate);
+    }
+    reservations = reservations || 0; // Ensure non-negative
+
+    // Calculate proposals
+    let proposals = sa.total_proposals;
+    if (proposals === undefined) {
+      const proposalRate = sa.proposal_rate || 
+                          (sa.fulfillment_rate && sa.reservation_rate ? 
+                           sa.fulfillment_rate / sa.reservation_rate : 
+                           0.65 + (generateRandomValue(0, 20, seed + 2) / 100));
+      proposals = Math.round(reservations * proposalRate);
+    }
+    proposals = proposals || 0;
+
+    // Calculate started (first stays only)
+    let started = sa.arrival_metrics?.first_stays?.arrived_count;
+    if (started === undefined) {
+      if (sa.total_starts !== undefined) { // Fallback to total starts if first_stays not available
+         started = sa.total_starts;
+      } else {
+        const startRate = sa.start_rate || 0.75 + (generateRandomValue(0, 20, seed + 3) / 100);
+        started = Math.round(proposals * startRate);
+      }
+    }
+    started = started || 0;
+
+    // Calculate completed - *ALIGNING LOGIC WITH prepareFunnelData*
+    let completed = sa.total_completions;
+    if (completed === undefined) {
+      const completionRate = sa.completion_rate || 0.7 + (generateRandomValue(0, 20, seed + 4) / 100);
+      completed = Math.round(started * completionRate);
+    }
+    completed = completed || 0;
     
-    // Compute proposal rate if not directly available
-    const proposal_rate = sa.proposal_rate || 
-                        (sa.fulfillment_rate ? sa.fulfillment_rate / (sa.reservation_rate || 1) : 0.6);
-    const proposals = Math.round(reservations * proposal_rate);
-    const no_proposal = reservations - proposals;
+    // INDUSTRY AVERAGE DATA - NUR FÜR AKTIVE AGENTUREN
+    // Filtere aktive Agenturen basierend auf is_active_recently
+    const active_agencies = allQuotasData.all_agencies.filter((agency: any) => agency.is_active_recently === true);
+    console.log(`Filtered ${active_agencies.length} active agencies out of ${allQuotasData.all_agencies.length} total.`);
     
-    const started = Math.round(proposals * (sa.start_rate || 0));
-    const cancelled_before_arrival = proposals - started;
+    // Debug: Zeige die ersten paar aktiven Agenturen
+    if (active_agencies.length > 0) {
+      console.log("First active agency:", active_agencies[0]);
+    }
     
-    const completed = Math.round(started * (sa.completion_rate || 0));
-    const early_ended = started - completed;
+    // Berechne Durchschnitt für "Reserviert und Vorschlag" mit aktiven Agenturen
+    let active_agencies_proposals_total = 0;
+    let active_agencies_postings_total = 0;
+    let active_agencies_with_data_count = 0;
     
-    // Ensure we don't have negative values
+    active_agencies.forEach((agency: any) => {
+      // Benutze die gleiche Logik wie für die ausgewählte Agentur, um fehlende Daten zu ergänzen
+      let agency_postings = agency.total_postings;
+      if (agency_postings === undefined) {
+        if (agency.total_reservations !== undefined && agency.reservation_rate && agency.reservation_rate > 0) {
+          agency_postings = Math.round(agency.total_reservations / agency.reservation_rate);
+        } else {
+          agency_postings = 0; // Skip this agency as we can't determine postings
+        }
+      }
+      
+      let agency_proposals = agency.total_proposals;
+      if (agency_proposals === undefined) {
+        if (agency.proposal_rate !== undefined && agency_postings > 0) {
+          agency_proposals = Math.round(agency_postings * agency.proposal_rate);
+        } else if (agency.fulfillment_rate !== undefined && agency.reservation_rate !== undefined && agency_postings > 0) {
+          agency_proposals = Math.round(agency_postings * agency.fulfillment_rate / agency.reservation_rate);
+        } else {
+          agency_proposals = 0; // Skip proposal calculation if no data available
+        }
+      }
+      
+      // Nur zählen, wenn die Agentur tatsächlich Daten hat
+      if (agency_postings > 0) {
+        active_agencies_proposals_total += agency_proposals;
+        active_agencies_postings_total += agency_postings;
+        active_agencies_with_data_count++;
+      }
+    });
+    
+    console.log(`Active agencies with data: ${active_agencies_with_data_count}`);
+    console.log(`Active agencies data totals: proposals=${active_agencies_proposals_total}, postings=${active_agencies_postings_total}`);
+    
+    // Der Rest des Codes bleibt unverändert und nutzt die Standard-Industriedurchschnittsdaten
+    // Ensure total_postings is available for industry average
+    let avg_total_postings = ia.total_postings;
+    if (avg_total_postings === undefined) {
+      if (ia.total_reservations !== undefined && ia.reservation_rate && ia.reservation_rate > 0) {
+        avg_total_postings = Math.round(ia.total_reservations / ia.reservation_rate);
+      } else {
+        avg_total_postings = 100; // Fallback
+      }
+    }
+    avg_total_postings = avg_total_postings || 100;
+    
+    // Calculate average reservations
+    let avg_reservations = ia.total_reservations;
+    if (avg_reservations === undefined) {
+      const avgReservationRate = ia.reservation_rate || 0.42;
+      avg_reservations = Math.round(avg_total_postings * avgReservationRate);
+    }
+    avg_reservations = avg_reservations || 0;
+
+    // Calculate average proposals
+    let avg_proposals = ia.total_proposals;
+    if (avg_proposals === undefined) {
+      const avgProposalRate = ia.proposal_rate || 
+                            (ia.fulfillment_rate && ia.reservation_rate ? 
+                             ia.fulfillment_rate / ia.reservation_rate : 
+                             0.60);
+      avg_proposals = Math.round(avg_reservations * avgProposalRate);
+    }
+    avg_proposals = avg_proposals || 0;
+
+    // Calculate average started
+    let avg_started = ia.arrival_metrics?.first_stays?.arrived_count;
+    if (avg_started === undefined) {
+      if (ia.total_starts !== undefined) {
+         avg_started = ia.total_starts;
+      } else {
+        const avgStartRate = ia.start_rate || 0.70;
+        avg_started = Math.round(avg_proposals * avgStartRate);
+      }
+    }
+    avg_started = avg_started || 0;
+
+    // Calculate average completed
+    let avg_completed = ia.total_completions;
+    if (avg_completed === undefined) {
+      const avgCompletionRate = ia.completion_rate || 0.65;
+      avg_completed = Math.round(avg_started * avgCompletionRate);
+    }
+    avg_completed = avg_completed || 0;
+    
+    // PERCENTAGES FOR SELECTED AGENCY
+    // Berechne Prozentsätze in Bezug auf die vorherige Stufe (für Konversionsraten)
+    const reservationRate = formatPercentage(reservations / total_postings * 100);
+    const proposalRate = formatPercentage(proposals / Math.max(1, reservations) * 100);
+    const startedRate = formatPercentage(started / Math.max(1, proposals) * 100);
+    const completedRate = formatPercentage(completed / Math.max(1, started) * 100);
+    
+    // Berechne Prozentsätze in Bezug auf die Gesamtmenge an Stellen
+    const reservationTotalRate = formatPercentage(reservations / total_postings * 100);
+    const proposalTotalRate = formatPercentage(proposals / total_postings * 100);
+    const startedTotalRate = formatPercentage(started / total_postings * 100);
+    const completedTotalRate = formatPercentage(completed / total_postings * 100);
+    
+    // PERCENTAGES FOR INDUSTRY AVERAGE
+    // Berechne Prozentsätze für den Branchendurchschnitt
+    const avgReservationRate = formatPercentage(avg_reservations / avg_total_postings * 100);
+    const avgProposalRate = formatPercentage(avg_proposals / Math.max(1, avg_reservations) * 100);
+    const avgStartedRate = formatPercentage(avg_started / Math.max(1, avg_proposals) * 100);
+    const avgCompletedRate = formatPercentage(avg_completed / Math.max(1, avg_started) * 100);
+    
+    // Berechne Prozentsätze in Bezug auf die Gesamtmenge an Stellen für Branchendurchschnitt
+    const avgReservationTotalRate = formatPercentage(avg_reservations / avg_total_postings * 100);
+    const avgProposalTotalRate = formatPercentage(avg_proposals / avg_total_postings * 100);
+    const avgStartedTotalRate = formatPercentage(avg_started / avg_total_postings * 100);
+    const avgCompletedTotalRate = formatPercentage(avg_completed / avg_total_postings * 100);
+    
+    // Berechne den neuen Durchschnitt für "Reserviert und Vorschlag" (nur aktive Agenturen)
+    let activeAgenciesProposalTotalRate;
+    if (active_agencies_postings_total > 0) {
+      activeAgenciesProposalTotalRate = formatPercentage((active_agencies_proposals_total / active_agencies_postings_total) * 100);
+      console.log(`Calculated active agencies proposal rate: ${activeAgenciesProposalTotalRate}`);
+    } else {
+      // Fallback auf den regulären Industriedurchschnitt
+      activeAgenciesProposalTotalRate = avgProposalTotalRate; 
+      console.log(`Using fallback (industry average) for active agencies: ${activeAgenciesProposalTotalRate}`);
+    }
+    
+    // Ensure we don't have negative values in the final output
     return [
       { 
         stage: 'Reserviert', 
         value: Math.max(0, reservations), 
         fill: '#4F86C6', 
-        percentage: formatPercentage(reservations / total_postings * 100) 
+        percentage: reservationRate, // Deprecated, but kept for potential internal use
+        conversionRate: reservationRate,
+        totalPercentage: reservationTotalRate,
+        avgTotalPercentage: avgReservationTotalRate,
+        avgConversionRate: avgReservationRate
       },
       { 
         stage: 'Reserviert und Vorschlag', 
         value: Math.max(0, proposals), 
         fill: '#65B2A9', 
-        percentage: formatPercentage(proposals / Math.max(1, reservations) * 100) 
+        percentage: proposalRate,
+        conversionRate: proposalRate,
+        totalPercentage: proposalTotalRate,
+        // Verwende den neuen Durchschnitt für aktive Agenturen nur für diesen Wert
+        avgTotalPercentage: activeAgenciesProposalTotalRate,
+        avgConversionRate: avgProposalRate
       },
       { 
-        stage: 'Anreise erfolgreich', 
+        stage: 'Anreise erfolgreich (Ersteinsätze)', 
         value: Math.max(0, started), 
         fill: '#4CAF50', 
-        percentage: formatPercentage(started / Math.max(1, proposals) * 100) 
+        percentage: startedRate,
+        conversionRate: startedRate,
+        totalPercentage: startedTotalRate,
+        avgTotalPercentage: avgStartedTotalRate,
+        avgConversionRate: avgStartedRate
       },
       { 
         stage: 'Einsatz vollständig durchgezogen', 
-        value: Math.max(0, completed), 
+        value: Math.max(0, completed), // Use the consistently calculated value
         fill: '#2E7D32', 
-        percentage: formatPercentage(completed / Math.max(1, started) * 100) 
+        percentage: completedRate,
+        conversionRate: completedRate,
+        totalPercentage: completedTotalRate,
+        avgTotalPercentage: avgCompletedTotalRate,
+        avgConversionRate: avgCompletedRate
       }
     ];
   };
@@ -736,6 +1218,34 @@ const QuotasPage: React.FC = () => {
     });
   };
 
+  // Helper function to compare rates safely
+  const isRateBetter = (rateA: number | undefined | null, rateB: number | undefined | null): boolean => {
+    const valA = rateA ?? -1;
+    const valB = rateB ?? -1;
+    if (valA === -1 || valB === -1) return false; // Treat undefined/null as not better
+    return valA > valB;
+  };
+  
+  // Neue Hilfsfunktion zum sicheren Extrahieren von geschachtelten Metriken
+  const getArrivalMetric = (path: string, defaultValue: number = 0): number => {
+    try {
+      const parts = path.split('.');
+      if (parts.length !== 3) return defaultValue;
+      
+      const [base, category, metric] = parts;
+      if (base !== 'arrival_metrics') return defaultValue;
+      
+      return selectedAgencyScatterData?.arrival_metrics?.[category]?.[metric] || defaultValue;
+    } catch (e) {
+      return defaultValue;
+    }
+  };
+  
+  // Neue Hilfsfunktion zum Formatieren der Anreiseraten
+  const formatArrivalRate = (path: string, defaultValue: number = 0): string => {
+    return formatPercentage(getArrivalMetric(path, defaultValue) * 100);
+  };
+
   return (
     <div className="quotas-page">
       <div className="mb-6 flex justify-between items-center">
@@ -744,16 +1254,93 @@ const QuotasPage: React.FC = () => {
             Quoten: {selectedAgency.agency_name}
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
-            Kennzahlen und Vergleich mit Branchendurchschnitt
+            Kennzahlen und Vergleich mit {comparisonType === 'agency' ? 'anderer Agentur' : comparisonType === 'historical' ? 'Vorperiode' : 'Branchendurchschnitt'}
           </p>
         </div>
         <div className="flex space-x-3">
-          <button 
-            onClick={() => setShowAgencyComparison(!showAgencyComparison)} 
-            className="text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-medium"
-          >
-            {showAgencyComparison ? 'Agenturvergleich ausblenden' : 'Mit anderen Agenturen vergleichen'}
-          </button>
+          <div className="relative inline-block mr-3">
+            <div className="flex items-center">
+              <div className="relative inline-block">
+                <select 
+                  className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-3 py-2 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="first">Nur Ersteinsätze</option>
+                  <option value="followup">Nur Wechseleinsätze</option>
+                  <option value="all">Gesamt</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+              <span className="ml-2 text-xs font-normal px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 rounded">In Entwicklung</span>
+            </div>
+          </div>
+          <div className="relative inline-block">
+            <div className="flex items-center">
+              <span className="mr-2 text-sm font-medium text-gray-700 dark:text-gray-300">Vergleichsansicht:</span>
+              <select 
+                className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={comparisonType}
+                onChange={handleComparisonTypeChange}
+              >
+                <option value="average">Mit Durchschnitt</option>
+                <option value="historical">Mit sich selbst</option>
+                <option value="agency">Mit anderer Agentur</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          
+          {comparisonType === 'agency' && (
+            <div className="relative inline-block ml-2">
+              <select 
+                className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={selectedComparisonAgency}
+                onChange={handleComparisonAgencyChange}
+              >
+                <option value="" disabled>Agentur auswählen</option>
+                {allAvailableAgencies
+                  .filter(agency => agency.agency_id !== selectedAgency.agency_id)
+                  .map(agency => (
+                    <option key={agency.agency_id} value={agency.agency_id}>
+                      {agency.agency_name}
+                    </option>
+                  ))
+                }
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+          )}
+          
+          {comparisonType === 'historical' && (
+            <div className="relative inline-block ml-2">
+              <select 
+                className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={historicalPeriod}
+                onChange={handleHistoricalPeriodChange}
+              >
+                <option value="last_quarter">Vorquartal</option>
+                <option value="last_year">Vorjahr (gleiches Quartal)</option>
+                <option value="last_6months">Letzte 6 Monate</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+          )}
+          
         <ExportButton 
           targetElementId="quotas-content" 
           filename="quoten-analyse" 
@@ -764,7 +1351,10 @@ const QuotasPage: React.FC = () => {
       
       <div id="quotas-content" className="print-container">
         <div className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md">
-          <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">Pipeline-Übersicht: Von Stellenausschreibung bis Abschluss</h3>
+          <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-white">Pipeline-Übersicht: Von Stellenausschreibung bis Abschluss</h3>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 sm:mb-0"><span className="font-medium">Hinweis:</span> Diese Analyse bezieht sich auf Ersteinsätze und nicht auf Wechseleinsätze.</p>
+          </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
@@ -805,79 +1395,99 @@ const QuotasPage: React.FC = () => {
                   </FunnelChart>
                 </ResponsiveContainer>
               </div>
+
+              {/* Tooltips für die Funnelstufen */}
+              <div className="mt-2">
+                <div className="flex flex-wrap">
+                  {prepareFunnelData().map((item, index) => (
+                    <div key={index} className="mr-4 mb-2 flex items-center">
+                      <span className="inline-block w-3 h-3 mr-1" style={{ backgroundColor: item.fill }}></span>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{item.name}</span>
+                      <InfoTooltip text={item.description} />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
             
             <div>
               <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Erfolgsschritte im Prozess</h4>
               <div className="h-96">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    layout="vertical"
-                    data={prepareDropoffData()}
-                    margin={{ top: 20, right: 30, left: 100, bottom: 5 }}
-                    barCategoryGap={10}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis 
-                      dataKey="stage" 
-                      type="category" 
-                      scale="band"
-                      tick={{ fontSize: 12 }}
-                    />
-                    <Tooltip
-                      formatter={(value: any, name: string, props: any) => {
-                        return [`${value} (${props.payload.percentage})`, props.payload.stage];
-                      }}
-                      cursor={{fill: 'rgba(180, 180, 180, 0.2)'}}
-                    />
-                    <Bar dataKey="value" barSize={30}>
-                      {prepareDropoffData().map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                      <LabelList 
-                        dataKey="percentage" 
-                        position="insideRight" 
-                        fill="#000000"
-                      />
-                      <LabelList 
-                        dataKey="value" 
-                        position="right" 
-                        fill="#666666"
-                        formatter={(value: any) => `(${value})`}
-                        offset={40}
-                      />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 h-full flex flex-col">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 mt-4">
+                    <thead>
+                      <tr>
+                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Phase</th>
+                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Anzahl</th>
+                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Anteil aller Stellen</th>
+                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Konversionsrate</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {prepareDropoffData().map((item, index) => {
+                        return (
+                          <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="w-4 h-4 mr-3" style={{ backgroundColor: item.fill }}></div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-white">{item.stage}</div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white font-semibold">{item.value}</td>
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-white">
+                                {item.totalPercentage}
+                                <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">(Ø {item.avgTotalPercentage})</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-white">
+                                {index === 0 ? '-' : item.conversionRate}
+                                {index > 0 && <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">(Ø {item.avgConversionRate})</span>}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
-          
-          <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm text-gray-600 dark:text-gray-300">
-            <p className="font-medium text-md mb-1">Interpretationshilfe:</p>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Der <span className="font-semibold">Erfolgsfunnel</span> zeigt den Weg von ausgeschriebenen Stellen bis zu erfolgreich abgeschlossenen Einsätzen.</li>
-              <li>Die <span className="font-semibold">Verlustpunkte</span> zeigen, wo und in welchem Umfang Kandidaten im Prozess ausscheiden.</li>
-              <li>Je steiler der Trichter abfällt, desto größer sind die Verluste an dieser Stelle.</li>
-            </ul>
-          </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="metric-card bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
             <h3 className="font-medium mb-2">Reservierungsrate</h3>
             <div className="value text-2xl font-bold mb-1">{formatPercentage((selectedAgencyScatterData?.reservation_rate || 0.45) * 100)}</div>
             <div className="text-sm text-gray-500 dark:text-gray-400">
-              Durchschnitt: {formatPercentage((allQuotasData?.industry_average?.reservation_rate || 0.42) * 100)}
+              {getComparisonLabel()}: {formatPercentage((getComparisonValue('reservation_rate') || 0.42) * 100)}
             </div>
           </div>
           
           <div className="metric-card bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
-            <h3 className="font-medium mb-2">Erfüllungsrate</h3>
-            <div className="value text-2xl font-bold mb-1">{formatPercentage((selectedAgencyScatterData?.fulfillment_rate || 0.68) * 100)}</div>
+            <h3 className="font-medium mb-2">Eindeutige Reservierungen</h3>
+            <div className="value text-2xl font-bold mb-1">{selectedAgencyScatterData?.reserved_postings || 0}</div>
             <div className="text-sm text-gray-500 dark:text-gray-400">
-              Durchschnitt: {formatPercentage((allQuotasData?.industry_average?.fulfillment_rate || 0.65) * 100)}
+              {getComparisonLabel()}: {comparisonType === 'historical'
+                ? getComparisonValue('reserved_postings') || 0
+                : (comparisonType === 'agency'
+                   ? getComparisonValue('reserved_postings') || 0
+                   : selectedAgencyScatterData?.total_reservation_count || 0)}
+            </div>
+            <div className="text-xs text-gray-500 italic mt-1">Pro Posting: {
+              allQuotasData?.selected_agency?.total_reservation_count && allQuotasData?.selected_agency?.reserved_postings ? 
+              (parseInt(allQuotasData.selected_agency.total_reservation_count.toString()) / parseInt(allQuotasData.selected_agency.reserved_postings.toString())).toFixed(2) : 
+              'N/A'
+            }</div>
+          </div>
+          
+          <div className="metric-card bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+            <h3 className="font-medium mb-2">Reservierungs-Erfüllungsrate</h3>
+            <div className="value text-2xl font-bold mb-1">{formatPercentage((selectedAgencyScatterData?.reservation_fulfillment_rate || 0.68) * 100)}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              {getComparisonLabel()}: {formatPercentage((getComparisonValue('reservation_fulfillment_rate') || 0.65) * 100)}
             </div>
           </div>
           
@@ -885,7 +1495,7 @@ const QuotasPage: React.FC = () => {
             <h3 className="font-medium mb-2">Abbruchrate (vor Anreise)</h3>
             <div className="value text-2xl font-bold mb-1">{cancellationRateData?.cancellation_ratio_gesamt ?? formatPercentage((selectedAgencyScatterData?.cancellation_rate || 0.12) * 100)}</div>
             <div className="text-sm text-gray-500 dark:text-gray-400">
-              Durchschnitt: {formatPercentage((allQuotasData?.industry_average?.cancellation_rate || 0.15) * 100)}
+              {getComparisonLabel()}: {formatPercentage((getComparisonValue('cancellation_rate') || 0.15) * 100)}
             </div>
           </div>
         </div>
@@ -1003,11 +1613,6 @@ const QuotasPage: React.FC = () => {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              
-              <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-xs text-gray-600 dark:text-gray-300">
-                <p className="font-medium mb-1">Hinweis:</p>
-                <p>Die gestrichelte Linie stellt die Abbruchrate dar, bei der ein niedriger Wert besser ist.</p>
-              </div>
             </div>
           </div>
           
@@ -1036,11 +1641,6 @@ const QuotasPage: React.FC = () => {
                     </Bar>
                   </ComposedChart>
                 </ResponsiveContainer>
-              </div>
-              
-              <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-xs text-gray-600 dark:text-gray-300">
-                <p className="font-medium mb-1">Interpretationshilfe:</p>
-                <p>Grüne Balken für die aktuelle Periode zeigen Verbesserungen, rote Balken Verschlechterungen an.</p>
               </div>
             </div>
           )}
@@ -1401,58 +2001,258 @@ const QuotasPage: React.FC = () => {
                 <tr>
                   <th>Kennzahl</th>
                   <th>{selectedAgency.agency_name}</th>
-                  <th>Durchschnitt</th>
+                  <th>{getComparisonLabel()}</th>
                   <th>Differenz</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td>Reservierungsrate</td>
+                  <td>Reservierungsrate (pro Posting)</td>
                   <td>{formatPercentage((selectedAgencyScatterData?.reservation_rate || 0.45) * 100)}</td>
-                  <td>{formatPercentage((allQuotasData?.industry_average?.reservation_rate || 0.42) * 100)}</td>
-                  <td className={selectedAgencyScatterData?.reservation_rate > allQuotasData?.industry_average?.reservation_rate ? 'text-green-600' : 'text-red-600'}>
-                    {formatPercentage(((selectedAgencyScatterData?.reservation_rate || 0.45) - (allQuotasData?.industry_average?.reservation_rate || 0.42)) * 100)}
+                  <td>{comparisonType === 'historical' 
+                       ? formatPercentage((getComparisonData()?.reservation_rate || 0.42) * 100)
+                       : formatPercentage((allQuotasData?.industry_average?.reservation_rate || 0.42) * 100)}</td>
+                  <td className={
+                     comparisonType === 'historical'
+                     ? (selectedAgencyScatterData?.reservation_rate > getComparisonData()?.reservation_rate ? 'text-green-600' : 'text-red-600')
+                     : (selectedAgencyScatterData?.reservation_rate > allQuotasData?.industry_average?.reservation_rate ? 'text-green-600' : 'text-red-600')}>
+                    {comparisonType === 'historical'
+                      ? formatPercentage(((selectedAgencyScatterData?.reservation_rate || 0.45) - (getComparisonData()?.reservation_rate || 0.42)) * 100)
+                      : formatPercentage(((selectedAgencyScatterData?.reservation_rate || 0.45) - (allQuotasData?.industry_average?.reservation_rate || 0.42)) * 100)}
                   </td>
                 </tr>
                 <tr>
-                  <td>Erfüllungsrate</td>
-                  <td>{formatPercentage((selectedAgencyScatterData?.fulfillment_rate || 0.68) * 100)}</td>
-                  <td>{formatPercentage((allQuotasData?.industry_average?.fulfillment_rate || 0.65) * 100)}</td>
-                  <td className={selectedAgencyScatterData?.fulfillment_rate > allQuotasData?.industry_average?.fulfillment_rate ? 'text-green-600' : 'text-red-600'}>
-                    {formatPercentage(((selectedAgencyScatterData?.fulfillment_rate || 0.68) - (allQuotasData?.industry_average?.fulfillment_rate || 0.65)) * 100)}
+                  <td>Reservierungen pro Posting</td>
+                  <td>{
+                    allQuotasData?.selected_agency?.total_reservation_count && allQuotasData?.selected_agency?.reserved_postings ? 
+                    (parseInt(allQuotasData.selected_agency.total_reservation_count.toString()) / parseInt(allQuotasData.selected_agency.reserved_postings.toString())).toFixed(2) : 
+                    'N/A'
+                  }</td>
+                  <td>{
+                    comparisonType === 'historical' && getComparisonData()?.total_reservation_count && getComparisonData()?.reserved_postings
+                    ? (parseInt(getComparisonData().total_reservation_count.toString()) / parseInt(getComparisonData().reserved_postings.toString())).toFixed(2)
+                    : allQuotasData?.industry_average?.total_reservation_count && allQuotasData?.industry_average?.reserved_postings
+                      ? (parseInt(allQuotasData.industry_average.total_reservation_count.toString()) / parseInt(allQuotasData.industry_average.reserved_postings.toString())).toFixed(2)
+                      : 'N/A'
+                  }</td>
+                  <td className={
+                    allQuotasData?.selected_agency?.total_reservation_count && 
+                    (comparisonType === 'historical' ? getComparisonData()?.total_reservation_count : allQuotasData?.industry_average?.total_reservation_count) && 
+                    allQuotasData?.selected_agency?.reserved_postings &&
+                    (comparisonType === 'historical' ? getComparisonData()?.reserved_postings : allQuotasData?.industry_average?.reserved_postings) &&
+                    (parseInt(allQuotasData.selected_agency.total_reservation_count.toString()) / parseInt(allQuotasData.selected_agency.reserved_postings.toString())) > 
+                    (parseInt((comparisonType === 'historical' ? getComparisonData()?.total_reservation_count : allQuotasData?.industry_average?.total_reservation_count).toString()) / 
+                     parseInt((comparisonType === 'historical' ? getComparisonData()?.reserved_postings : allQuotasData?.industry_average?.reserved_postings).toString())) 
+                    ? 'text-green-600' : 'text-red-600'
+                  }>
+                    {
+                      allQuotasData?.selected_agency?.total_reservation_count && 
+                      (comparisonType === 'historical' ? getComparisonData()?.total_reservation_count : allQuotasData?.industry_average?.total_reservation_count) &&
+                      allQuotasData?.selected_agency?.reserved_postings &&
+                      (comparisonType === 'historical' ? getComparisonData()?.reserved_postings : allQuotasData?.industry_average?.reserved_postings) ?
+                      (
+                        (parseInt(allQuotasData.selected_agency.total_reservation_count.toString()) / parseInt(allQuotasData.selected_agency.reserved_postings.toString())) - 
+                        (parseInt((comparisonType === 'historical' ? getComparisonData()?.total_reservation_count : allQuotasData?.industry_average?.total_reservation_count).toString()) / 
+                         parseInt((comparisonType === 'historical' ? getComparisonData()?.reserved_postings : allQuotasData?.industry_average?.reserved_postings).toString()))
+                      ).toFixed(2) : 
+                      'N/A'
+                    }
+                  </td>
+                </tr>
+                <tr>
+                  <td>Reservierungs-Erfüllungsrate</td>
+                  <td>{formatPercentage((selectedAgencyScatterData?.reservation_fulfillment_rate || 0.68) * 100)}</td>
+                  <td>{comparisonType === 'historical'
+                       ? formatPercentage((getComparisonData()?.reservation_fulfillment_rate || 0.65) * 100)
+                       : formatPercentage((allQuotasData?.industry_average?.reservation_fulfillment_rate || 0.65) * 100)}</td>
+                  <td className={
+                     comparisonType === 'historical'
+                     ? (selectedAgencyScatterData?.reservation_fulfillment_rate > getComparisonData()?.reservation_fulfillment_rate ? 'text-green-600' : 'text-red-600')
+                     : (selectedAgencyScatterData?.reservation_fulfillment_rate > allQuotasData?.industry_average?.reservation_fulfillment_rate ? 'text-green-600' : 'text-red-600')}>
+                    {comparisonType === 'historical'
+                      ? formatPercentage(((selectedAgencyScatterData?.reservation_fulfillment_rate || 0.68) - (getComparisonData()?.reservation_fulfillment_rate || 0.65)) * 100)
+                      : formatPercentage(((selectedAgencyScatterData?.reservation_fulfillment_rate || 0.68) - (allQuotasData?.industry_average?.reservation_fulfillment_rate || 0.65)) * 100)}
                   </td>
                 </tr>
                 <tr>
                   <td>Abbruchrate</td>
                   <td>{formatPercentage((selectedAgencyScatterData?.cancellation_rate || 0.12) * 100)}</td>
-                  <td>{formatPercentage((allQuotasData?.industry_average?.cancellation_rate || 0.15) * 100)}</td>
-                  <td className={selectedAgencyScatterData?.cancellation_rate < allQuotasData?.industry_average?.cancellation_rate ? 'text-green-600' : 'text-red-600'}>
-                    {formatPercentage(((selectedAgencyScatterData?.cancellation_rate || 0.12) - (allQuotasData?.industry_average?.cancellation_rate || 0.15)) * 100)}
+                  <td>{comparisonType === 'historical'
+                       ? formatPercentage((getComparisonData()?.cancellation_rate || 0.15) * 100)
+                       : formatPercentage((allQuotasData?.industry_average?.cancellation_rate || 0.15) * 100)}</td>
+                  <td className={
+                     comparisonType === 'historical'
+                     ? (selectedAgencyScatterData?.cancellation_rate < getComparisonData()?.cancellation_rate ? 'text-green-600' : 'text-red-600')
+                     : (selectedAgencyScatterData?.cancellation_rate < allQuotasData?.industry_average?.cancellation_rate ? 'text-green-600' : 'text-red-600')}>
+                    {comparisonType === 'historical'
+                      ? formatPercentage(((selectedAgencyScatterData?.cancellation_rate || 0.12) - (getComparisonData()?.cancellation_rate || 0.15)) * 100)
+                      : formatPercentage(((selectedAgencyScatterData?.cancellation_rate || 0.12) - (allQuotasData?.industry_average?.cancellation_rate || 0.15)) * 100)}
                   </td>
                 </tr>
+                <tr className="bg-blue-50 dark:bg-blue-900/20">
+                  <td colSpan={4} className="font-medium pt-4 pb-2">Anreisemetriken - Differenziert</td>
+                </tr>
+                
+                {/* Ersteinsätze Metrics */}
                 <tr>
-                  <td>Antrittsrate</td>
+                  <td className="pl-4">Ersteinsätze Anreiserate (Erfüllt zu Anreise)</td>
+                  <td>{formatArrivalRate('arrival_metrics.first_stays.fulfilled_to_arrival_ratio', 0.75)}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.first_stays?.fulfilled_to_arrival_ratio
+                       ? formatPercentage(getComparisonData().arrival_metrics.first_stays.fulfilled_to_arrival_ratio * 100)
+                       : '-'}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.first_stays?.fulfilled_to_arrival_ratio
+                       ? formatPercentage((getArrivalMetric('arrival_metrics.first_stays.fulfilled_to_arrival_ratio', 0.75) - 
+                                          getComparisonData().arrival_metrics.first_stays.fulfilled_to_arrival_ratio) * 100)
+                       : '-'}</td>
+                </tr>
+                <tr>
+                  <td className="pl-4">Ersteinsätze Anreiserate (Akzeptiert zu Anreise)</td>
+                  <td>{formatArrivalRate('arrival_metrics.first_stays.accepted_to_arrival_ratio')}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.first_stays?.accepted_to_arrival_ratio
+                       ? formatPercentage(getComparisonData().arrival_metrics.first_stays.accepted_to_arrival_ratio * 100)
+                       : '-'}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.first_stays?.accepted_to_arrival_ratio
+                       ? formatPercentage((getArrivalMetric('arrival_metrics.first_stays.accepted_to_arrival_ratio', 0) - 
+                                          getComparisonData().arrival_metrics.first_stays.accepted_to_arrival_ratio) * 100)
+                       : '-'}</td>
+                </tr>
+                <tr>
+                  <td className="pl-4">Ersteinsätze Anreiserate (Bestätigt zu Anreise)</td>
+                  <td>{formatArrivalRate('arrival_metrics.first_stays.confirmed_to_arrival_ratio')}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.first_stays?.confirmed_to_arrival_ratio
+                       ? formatPercentage(getComparisonData().arrival_metrics.first_stays.confirmed_to_arrival_ratio * 100)
+                       : '-'}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.first_stays?.confirmed_to_arrival_ratio
+                       ? formatPercentage((getArrivalMetric('arrival_metrics.first_stays.confirmed_to_arrival_ratio', 0) - 
+                                          getComparisonData().arrival_metrics.first_stays.confirmed_to_arrival_ratio) * 100)
+                       : '-'}</td>
+                </tr>
+                <tr>
+                  <td className="pl-4">Ersteinsätze Anzahl Anreisen</td>
+                  <td>{getArrivalMetric('arrival_metrics.first_stays.arrived_count')}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.first_stays?.arrived_count
+                       ? getComparisonData().arrival_metrics.first_stays.arrived_count
+                       : '-'}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.first_stays?.arrived_count
+                       ? getArrivalMetric('arrival_metrics.first_stays.arrived_count') - 
+                         getComparisonData().arrival_metrics.first_stays.arrived_count
+                       : '-'}</td>
+                </tr>
+                
+                {/* Wechsel/Folgeeinsätze Metrics */}
+                <tr>
+                  <td className="pl-4">Folgeeinsätze Anreiserate (Erfüllt zu Anreise)</td>
+                  <td>{formatArrivalRate('arrival_metrics.follow_stays.fulfilled_to_arrival_ratio', 0.85)}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.follow_stays?.fulfilled_to_arrival_ratio
+                       ? formatPercentage(getComparisonData().arrival_metrics.follow_stays.fulfilled_to_arrival_ratio * 100)
+                       : '-'}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.follow_stays?.fulfilled_to_arrival_ratio
+                       ? formatPercentage((getArrivalMetric('arrival_metrics.follow_stays.fulfilled_to_arrival_ratio', 0.85) - 
+                                          getComparisonData().arrival_metrics.follow_stays.fulfilled_to_arrival_ratio) * 100)
+                       : '-'}</td>
+                </tr>
+                <tr>
+                  <td className="pl-4">Folgeeinsätze Anreiserate (Akzeptiert zu Anreise)</td>
+                  <td>{formatArrivalRate('arrival_metrics.follow_stays.accepted_to_arrival_ratio')}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.follow_stays?.accepted_to_arrival_ratio
+                       ? formatPercentage(getComparisonData().arrival_metrics.follow_stays.accepted_to_arrival_ratio * 100)
+                       : '-'}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.follow_stays?.accepted_to_arrival_ratio
+                       ? formatPercentage((getArrivalMetric('arrival_metrics.follow_stays.accepted_to_arrival_ratio', 0) - 
+                                          getComparisonData().arrival_metrics.follow_stays.accepted_to_arrival_ratio) * 100)
+                       : '-'}</td>
+                </tr>
+                <tr>
+                  <td className="pl-4">Folgeeinsätze Anreiserate (Bestätigt zu Anreise)</td>
+                  <td>{formatArrivalRate('arrival_metrics.follow_stays.confirmed_to_arrival_ratio')}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.follow_stays?.confirmed_to_arrival_ratio
+                       ? formatPercentage(getComparisonData().arrival_metrics.follow_stays.confirmed_to_arrival_ratio * 100)
+                       : '-'}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.follow_stays?.confirmed_to_arrival_ratio
+                       ? formatPercentage((getArrivalMetric('arrival_metrics.follow_stays.confirmed_to_arrival_ratio', 0) - 
+                                          getComparisonData().arrival_metrics.follow_stays.confirmed_to_arrival_ratio) * 100)
+                       : '-'}</td>
+                </tr>
+                <tr>
+                  <td className="pl-4">Folgeeinsätze Anzahl Anreisen</td>
+                  <td>{getArrivalMetric('arrival_metrics.follow_stays.arrived_count')}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.follow_stays?.arrived_count
+                       ? getComparisonData().arrival_metrics.follow_stays.arrived_count
+                       : '-'}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.follow_stays?.arrived_count
+                       ? getArrivalMetric('arrival_metrics.follow_stays.arrived_count') - 
+                         getComparisonData().arrival_metrics.follow_stays.arrived_count
+                       : '-'}</td>
+                </tr>
+                
+                {/* Gesamtmetriken - alte Darstellung */}
+                <tr>
+                  <td>Anreiserate (Gesamt)</td>
                   <td>{formatPercentage((selectedAgencyScatterData?.start_rate || 0.88) * 100)}</td>
-                  <td>{formatPercentage((allQuotasData?.industry_average?.start_rate || 0.85) * 100)}</td>
-                  <td className={selectedAgencyScatterData?.start_rate > allQuotasData?.industry_average?.start_rate ? 'text-green-600' : 'text-red-600'}>
-                    {formatPercentage(((selectedAgencyScatterData?.start_rate || 0.88) - (allQuotasData?.industry_average?.start_rate || 0.85)) * 100)}
+                  <td>{comparisonType === 'historical'
+                       ? formatPercentage((getComparisonData()?.start_rate || 0.85) * 100)
+                       : formatPercentage((allQuotasData?.industry_average?.start_rate || 0.85) * 100)}</td>
+                  <td className={
+                     comparisonType === 'historical'
+                     ? (selectedAgencyScatterData?.start_rate > getComparisonData()?.start_rate ? 'text-green-600' : 'text-red-600')
+                     : (isRateBetter(selectedAgencyScatterData?.start_rate, allQuotasData?.industry_average?.start_rate) ? 'text-green-600' : 'text-red-600')}>
+                    {comparisonType === 'historical'
+                      ? formatPercentage(((selectedAgencyScatterData?.start_rate || 0.88) - (getComparisonData()?.start_rate || 0.85)) * 100)
+                      : formatPercentage(((selectedAgencyScatterData?.start_rate || 0.88) - (allQuotasData?.industry_average?.start_rate || 0.85)) * 100)}
                   </td>
+                </tr>
+                
+                {/* Anzahl-Vergleich für Transparenz */}
+                <tr>
+                  <td className="font-medium">Anreisen (Gesamt)</td>
+                  <td>{getArrivalMetric('arrival_metrics.total.arrived_count')}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.total?.arrived_count
+                       ? getComparisonData().arrival_metrics.total.arrived_count
+                       : '-'}</td>
+                  <td>{comparisonType === 'historical' && getComparisonData()?.arrival_metrics?.total?.arrived_count
+                       ? getArrivalMetric('arrival_metrics.total.arrived_count') - 
+                         getComparisonData().arrival_metrics.total.arrived_count
+                       : '-'}</td>
                 </tr>
                 <tr>
                   <td>Abschlussrate</td>
                   <td>{formatPercentage((selectedAgencyScatterData?.completion_rate || 0.82) * 100)}</td>
-                  <td>{formatPercentage((allQuotasData?.industry_average?.completion_rate || 0.78) * 100)}</td>
-                  <td className={selectedAgencyScatterData?.completion_rate > allQuotasData?.industry_average?.completion_rate ? 'text-green-600' : 'text-red-600'}>
-                    {formatPercentage(((selectedAgencyScatterData?.completion_rate || 0.82) - (allQuotasData?.industry_average?.completion_rate || 0.78)) * 100)}
+                  <td>{comparisonType === 'historical'
+                       ? formatPercentage((getComparisonData()?.completion_rate || 0.78) * 100)
+                       : formatPercentage((allQuotasData?.industry_average?.completion_rate || 0.78) * 100)}</td>
+                  <td className={
+                      comparisonType === 'historical'
+                      ? (selectedAgencyScatterData?.completion_rate > getComparisonData()?.completion_rate ? 'text-green-600' : 'text-red-600')
+                      : (selectedAgencyScatterData?.completion_rate > allQuotasData?.industry_average?.completion_rate ? 'text-green-600' : 'text-red-600')}>
+                    {comparisonType === 'historical'
+                      ? formatPercentage(((selectedAgencyScatterData?.completion_rate || 0.82) - (getComparisonData()?.completion_rate || 0.78)) * 100)
+                      : formatPercentage(((selectedAgencyScatterData?.completion_rate || 0.82) - (allQuotasData?.industry_average?.completion_rate || 0.78)) * 100)}
                   </td>
                 </tr>
                 <tr>
                   <td>Vorzeitige Beendigungsrate</td>
                   <td>{formatPercentage((selectedAgencyScatterData?.early_end_rate || 0.18) * 100)}</td>
-                  <td>{formatPercentage((allQuotasData?.industry_average?.early_end_rate || 0.22) * 100)}</td>
-                  <td className={selectedAgencyScatterData?.early_end_rate < allQuotasData?.industry_average?.early_end_rate ? 'text-green-600' : 'text-red-600'}>
-                    {formatPercentage(((selectedAgencyScatterData?.early_end_rate || 0.18) - (allQuotasData?.industry_average?.early_end_rate || 0.22)) * 100)}
+                  <td>{comparisonType === 'historical'
+                       ? formatPercentage((getComparisonData()?.early_end_rate || 0.22) * 100)
+                       : formatPercentage((allQuotasData?.industry_average?.early_end_rate || 0.22) * 100)}</td>
+                  <td className={
+                      comparisonType === 'historical'
+                      ? (selectedAgencyScatterData?.early_end_rate < getComparisonData()?.early_end_rate ? 'text-green-600' : 'text-red-600')
+                      : (selectedAgencyScatterData?.early_end_rate < allQuotasData?.industry_average?.early_end_rate ? 'text-green-600' : 'text-red-600')}>
+                    {comparisonType === 'historical'
+                      ? formatPercentage(((selectedAgencyScatterData?.early_end_rate || 0.18) - (getComparisonData()?.early_end_rate || 0.22)) * 100)
+                      : formatPercentage(((selectedAgencyScatterData?.early_end_rate || 0.18) - (allQuotasData?.industry_average?.early_end_rate || 0.22)) * 100)}
                   </td>
+                </tr>
+                <tr>
+                  <td className="font-medium">Anreisen (vereinfacht)</td>
+                  <td>{selectedAgencyScatterData?.simple_arrival_count || 0}</td>
+                  <td>{comparisonType === 'historical'
+                       ? getComparisonData()?.simple_arrival_count || 0
+                       : allQuotasData?.industry_average?.simple_arrival_count || 0}</td>
+                  <td>{comparisonType === 'historical'
+                       ? (selectedAgencyScatterData?.simple_arrival_count || 0) - (getComparisonData()?.simple_arrival_count || 0)
+                       : ''}</td>
                 </tr>
               </tbody>
             </table>
