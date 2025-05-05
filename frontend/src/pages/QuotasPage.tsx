@@ -6,6 +6,8 @@ import ErrorMessage from '../components/common/ErrorMessage';
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, Cell, PieChart, Pie, LineChart, Line, ComposedChart, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import { FunnelChart, Funnel, LabelList } from 'recharts';
 import ExportButton from '../components/common/ExportButton';
+import { format, subYears, subQuarters } from 'date-fns';
+import { calculateDateRange, getCurrentQuarter, getQuarterStart, getQuarterEnd } from '../components/common/TimeFilter';
 
 // Define a type for the scatter data points
 interface ScatterDataPoint {
@@ -115,32 +117,45 @@ const QuotasPage: React.FC = () => {
   
   // Hilfsfunktion, um das korrekte historische Zeitintervall basierend auf dem aktuellen Zeitraum zu bestimmen
   const getHistoricalTimePeriod = (currentPeriod: string, comparisonPeriod: HistoricalPeriod): string => {
-    // Um sicherzustellen, dass wir unterschiedliche Zeiträume für die Vergleiche verwenden,
-    // implementieren wir eine klarere Logik
-    
-    // Da das Backend aktuell nur begrenzte Zeiträume unterstützt, müssen wir
-    // die bestmöglichen Zeiträume für den Vergleich auswählen
+    // Für den Vergleich "mit sich selbst (Vorjahr)" wollen wir den gleichen Zeitraum wie der aktuelle,
+    // aber ein Jahr zurück
     
     // Vorzeitraum-Mapping basierend auf aktuell gewählter Zeit und Vergleichszeitraum
-    // Diese Logik stellt sicher, dass wir möglichst unterschiedliche Zeiträume zum Vergleich haben
-    
-    if (comparisonPeriod === 'last_quarter') {
-      if (currentPeriod === 'last_month') return 'last_quarter';
-      if (currentPeriod === 'last_quarter') return 'last_month'; // Ein Monat als Vorquartal-Näherung
-      if (currentPeriod === 'last_year') return 'last_quarter';
-      return 'last_month'; // Fallback
+    if (comparisonPeriod === 'last_year') {
+      // Für "Vorjahr (gleiches Quartal)" wollen wir genau den gleichen Zeitraum, aber ein Jahr früher
+      switch(currentPeriod) {
+        case 'current_quarter':
+          // Wir befinden uns im aktuellen Quartal, ein Jahr zurück ist last_year (aber gleiches Quartal)
+          return 'same_quarter_last_year';
+        case 'last_quarter':
+          // Wir befinden uns im letzten Quartal, ein Jahr zurück ist das gleiche Quartal im Vorjahr
+          return 'same_quarter_last_year';
+        case 'current_year':
+          // Wir befinden uns im aktuellen Jahr, zurück ist einfach last_year
+          return 'last_year';
+        case 'last_year':
+          // Wir befinden uns bereits im letzten Jahr, zurück ist two_years_ago
+          return 'two_years_ago';
+        default:
+          // Standardmäßig nutzen wir einfach last_year
+          return 'last_year';
+      }
     }
     
-    if (comparisonPeriod === 'last_year') {
-      // Bei "Vorjahr" immer das letzte Jahr zurückgeben, egal was aktuell ausgewählt ist
-      return 'last_year';
+    if (comparisonPeriod === 'last_quarter') {
+      // Das vorherige Quartal je nach aktueller Auswahl
+      switch(currentPeriod) {
+        case 'current_quarter':
+          return 'last_quarter';
+        case 'last_quarter':
+          return 'two_quarters_ago';
+        default:
+          return 'last_quarter';
+      }
     }
     
     if (comparisonPeriod === 'last_6months') {
-      if (currentPeriod === 'last_month') return 'last_6months';
-      if (currentPeriod === 'last_quarter') return 'last_6months';
-      if (currentPeriod === 'last_year') return 'last_6months';
-      return 'last_6months'; // Fallback
+      return 'last_6months';
     }
     
     // Default-Fallback
@@ -155,13 +170,19 @@ const QuotasPage: React.FC = () => {
       try {
         setIsLoading(true);
         
-        // Das Backend unterstützt aktuell nur last_quarter, last_month, last_year und all_time
-        // Wir ermitteln das passende historische Zeitintervall basierend auf der aktuellen Auswahl
-        const historicalTimePeriod = getHistoricalTimePeriod(timePeriod, historicalPeriod);
+        // Wir berechnen den historischen Datumsbereich
+        const { startDate: histStartDate, endDate: histEndDate } = getHistoricalDateRange();
+        const { startDate: currStartDate, endDate: currEndDate } = getCurrentDateRange();
         
+        // Für detailliertes Logging
         console.log("-------- HISTORICAL DATA REQUEST --------");
-        console.log(`Aktueller Zeitraum: ${timePeriod}`);
+        console.log(`Aktueller Zeitraum: ${timePeriod} (${currStartDate} - ${currEndDate})`);
         console.log(`Ausgewählter Vergleichszeitraum: ${historicalPeriod}`);
+        console.log(`Historischer Zeitraum: ${histStartDate} - ${histEndDate}`);
+        
+        // Das Backend unterstützt aktuell nur vordefinierte Zeiträume
+        // Als Workaround verwenden wir den best-match API-Zeitraum
+        const historicalTimePeriod = getHistoricalTimePeriod(timePeriod, historicalPeriod);
         console.log(`Tatsächlich verwendeter API-Zeitraum: ${historicalTimePeriod}`);
         
         // Die normale API mit historischem Zeitraum aufrufen
@@ -170,6 +191,13 @@ const QuotasPage: React.FC = () => {
           selectedAgency.agency_id, 
           historicalTimePeriod
         );
+        
+        // In Zukunft könnte man hier für größere Präzision benutzerdefinierte Zeiträume nutzen:
+        // const historicalData = await apiService.getAgencyQuotasWithCustomDates(
+        //   selectedAgency.agency_id, 
+        //   histStartDate,
+        //   histEndDate
+        // );
         
         console.log("Received historical data:", historicalData);
         console.log("Selected agency in historical data:", historicalData?.selected_agency);
@@ -1268,31 +1296,8 @@ const QuotasPage: React.FC = () => {
   
   // Berechnet den Datumsbereich für den aktuellen Zeitraum
   const getCurrentDateRange = (): { startDate: string, endDate: string } => {
-    const now = new Date();
-    let startDate: Date;
-    const endDate: Date = now;
-
-    switch (timePeriod) {
-      case 'last_month':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        break;
-      case 'last_quarter':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-        break;
-      case 'last_year':
-        startDate = new Date(now.getFullYear() - 1, now.getMonth(), 1);
-        break;
-      case 'all_time':
-        startDate = new Date(2000, 0, 1); // Frühes Datum für "all time"
-        break;
-      default:
-        startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-    }
-
-    return {
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0]
-    };
+    // Wir nutzen die Funktion aus dem TimeFilter
+    return calculateDateRange(timePeriod);
   };
   
   // Berechnet den Datumsbereich für den historischen Vergleichszeitraum
@@ -1302,26 +1307,47 @@ const QuotasPage: React.FC = () => {
     let startDate: Date;
     let endDate: Date;
 
+    // Berechne die aktuellen Quartale und Jahre
+    const currentQuarter = getCurrentQuarter(now);
+    const currentYear = now.getFullYear();
+
     switch (historicalTimePeriod) {
-      case 'last_month':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-        endDate = new Date(now.getFullYear(), now.getMonth() - 1, 0);
+      case 'same_quarter_last_year':
+        // Wir wollen genau das gleiche Quartal, aber ein Jahr früher
+        const quarterLastYear = new Date(now.getFullYear() - 1, (currentQuarter - 1) * 3, 1);
+        startDate = getQuarterStart(quarterLastYear);
+        endDate = getQuarterEnd(quarterLastYear);
+        break;
+      case 'two_years_ago':
+        // Zwei Jahre zurück
+        startDate = new Date(now.getFullYear() - 2, 0, 1);
+        endDate = new Date(now.getFullYear() - 2, 11, 31);
         break;
       case 'last_quarter':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 6, 1);
-        endDate = new Date(now.getFullYear(), now.getMonth() - 3, 0);
+        const lastQuarter = subQuarters(now, 1);
+        startDate = getQuarterStart(lastQuarter);
+        endDate = getQuarterEnd(lastQuarter);
+        break;
+      case 'two_quarters_ago':
+        const twoQuartersAgo = subQuarters(now, 2);
+        startDate = getQuarterStart(twoQuartersAgo);
+        endDate = getQuarterEnd(twoQuartersAgo);
         break;
       case 'last_year':
-        startDate = new Date(now.getFullYear() - 2, now.getMonth(), 1);
-        endDate = new Date(now.getFullYear() - 1, now.getMonth() + 1, 0);
+        // Ein Jahr zurück (volles Jahr)
+        startDate = new Date(now.getFullYear() - 1, 0, 1);
+        endDate = new Date(now.getFullYear() - 1, 11, 31);
         break;
       case 'last_6months':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 9, 1);
-        endDate = new Date(now.getFullYear(), now.getMonth() - 3, 0);
+        // Letzte 6 Monate
+        startDate = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() - 1, 
+                           new Date(now.getFullYear(), now.getMonth(), 0).getDate());
         break;
       default:
-        startDate = new Date(now.getFullYear() - 1, now.getMonth() - 3, 1);
-        endDate = new Date(now.getFullYear(), now.getMonth() - 3, 0);
+        // Fallback auf letztes Jahr
+        startDate = new Date(now.getFullYear() - 1, 0, 1);
+        endDate = new Date(now.getFullYear() - 1, 11, 31);
     }
 
     return {
