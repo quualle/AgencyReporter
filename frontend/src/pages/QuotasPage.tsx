@@ -1259,7 +1259,7 @@ const QuotasPage: React.FC = () => {
     return formatPercentage(getArrivalMetric(path, defaultValue) * 100);
   };
   
-  // Importiert vom TimeFilter, formatiert ein Datum im deutschen Format
+  // Hilfsfunktion zum Formatieren eines Datums im deutschen Format (TT.MM.JJJJ)
   const formatGermanDate = (dateStr: string): string => {
     const parts = dateStr.split('-');
     if (parts.length !== 3) return dateStr;
@@ -1297,7 +1297,6 @@ const QuotasPage: React.FC = () => {
   
   // Berechnet den Datumsbereich für den historischen Vergleichszeitraum
   const getHistoricalDateRange = (): { startDate: string, endDate: string } => {
-    const currentRange = getCurrentDateRange();
     const historicalTimePeriod = getHistoricalTimePeriod(timePeriod, historicalPeriod);
     const now = new Date();
     let startDate: Date;
@@ -1370,39 +1369,43 @@ const QuotasPage: React.FC = () => {
                   className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                   value={comparisonType}
                   onChange={handleComparisonTypeChange}
-              >
-                <option value="average">Mit Durchschnitt</option>
-                <option value="historical">Mit sich selbst</option>
-                <option value="agency">Mit anderer Agentur</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
-                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </div>
-            </div>
-            
-            {/* Datumsanzeige für Vergleichszeiträume */}
-            {comparisonType === 'historical' && (
-              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                <div className="flex flex-col">
-                  <div className="flex">
-                    <span className="font-semibold mr-1">Aktuell:</span>
-                    {(() => {
-                      const { startDate, endDate } = getCurrentDateRange();
-                      return `${formatGermanDate(startDate)} - ${formatGermanDate(endDate)}`;
-                    })()}
-                  </div>
-                  <div className="flex">
-                    <span className="font-semibold mr-1">{getComparisonLabel()}:</span>
-                    {(() => {
-                      const { startDate, endDate } = getHistoricalDateRange();
-                      return `${formatGermanDate(startDate)} - ${formatGermanDate(endDate)}`;
-                    })()}
-                  </div>
+                >
+                  <option value="average">Mit Durchschnitt</option>
+                  <option value="historical">Mit sich selbst</option>
+                  <option value="agency">Mit anderer Agentur</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
                 </div>
               </div>
-            )}
+              
+              {comparisonType === 'historical' && (
+                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex flex-col">
+                    <div className="flex">
+                      <span className="font-semibold mr-1">Aktuell:</span>
+                      <span>
+                        {(() => {
+                          const { startDate, endDate } = getCurrentDateRange();
+                          return `${formatGermanDate(startDate)} - ${formatGermanDate(endDate)}`;
+                        })()}
+                      </span>
+                    </div>
+                    <div className="flex">
+                      <span className="font-semibold mr-1">{getComparisonLabel()}:</span>
+                      <span>
+                        {(() => {
+                          const { startDate, endDate } = getHistoricalDateRange();
+                          return `${formatGermanDate(startDate)} - ${formatGermanDate(endDate)}`;
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           
           {comparisonType === 'agency' && (
