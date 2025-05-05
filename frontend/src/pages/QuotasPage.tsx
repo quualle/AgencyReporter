@@ -115,53 +115,36 @@ const QuotasPage: React.FC = () => {
   
   // Hilfsfunktion, um das korrekte historische Zeitintervall basierend auf dem aktuellen Zeitraum zu bestimmen
   const getHistoricalTimePeriod = (currentPeriod: string, comparisonPeriod: HistoricalPeriod): string => {
-    // Aktuelle Perioden-Logik
-    switch(currentPeriod) {
-      case 'last_month':
-        switch(comparisonPeriod) {
-          case 'last_quarter':
-            return 'last_quarter'; // Wenn aktuell der letzte Monat, vergleichen mit dem letzten Quartal
-          case 'last_6months':
-            return 'last_6months'; // Wenn aktuell der letzte Monat, vergleichen mit den letzten 6 Monaten
-          case 'last_year':
-          default:
-            return 'last_year'; // Wenn aktuell der letzte Monat, vergleichen mit dem letzten Jahr
-        }
-      
-      case 'last_quarter':
-        switch(comparisonPeriod) {
-          case 'last_quarter':
-            // Eigentlich bräuchten wir hier "previous_quarter", aber das ist noch nicht implementiert
-            // Als Workaround nehmen wir vorerst das letzte Jahr
-            return 'last_year';
-          case 'last_6months':
-            return 'last_6months';
-          case 'last_year':
-          default:
-            return 'last_year';
-        }
-      
-      case 'last_year':
-        switch(comparisonPeriod) {
-          case 'last_quarter':
-            // Wenn aktuell das letzte Jahr angeschaut wird, macht ein Vergleich mit dem letzten Quartal wenig Sinn
-            // Stattdessen nehmen wir hier all_time
-            return 'all_time';
-          case 'last_6months':
-            // Auch hier macht ein Vergleich mit 6 Monaten wenig Sinn, daher all_time
-            return 'all_time';
-          case 'last_year':
-          default:
-            // Eigentlich bräuchten wir hier "previous_year", aber das ist noch nicht implementiert
-            // Als Workaround nehmen wir vorerst all_time
-            return 'all_time';
-        }
-      
-      case 'all_time':
-      default:
-        // Bei "all_time" gibt es keinen sinnvollen Vergleich, daher immer das letzte Jahr nehmen
-        return 'last_year';
+    // Um sicherzustellen, dass wir unterschiedliche Zeiträume für die Vergleiche verwenden,
+    // implementieren wir eine klarere Logik
+    
+    // Da das Backend aktuell nur begrenzte Zeiträume unterstützt, müssen wir
+    // die bestmöglichen Zeiträume für den Vergleich auswählen
+    
+    // Vorzeitraum-Mapping basierend auf aktuell gewählter Zeit und Vergleichszeitraum
+    // Diese Logik stellt sicher, dass wir möglichst unterschiedliche Zeiträume zum Vergleich haben
+    
+    if (comparisonPeriod === 'last_quarter') {
+      if (currentPeriod === 'last_month') return 'last_quarter';
+      if (currentPeriod === 'last_quarter') return 'last_month'; // Ein Monat als Vorquartal-Näherung
+      if (currentPeriod === 'last_year') return 'last_quarter';
+      return 'last_month'; // Fallback
     }
+    
+    if (comparisonPeriod === 'last_year') {
+      // Bei "Vorjahr" immer das letzte Jahr zurückgeben, egal was aktuell ausgewählt ist
+      return 'last_year';
+    }
+    
+    if (comparisonPeriod === 'last_6months') {
+      if (currentPeriod === 'last_month') return 'last_6months';
+      if (currentPeriod === 'last_quarter') return 'last_6months';
+      if (currentPeriod === 'last_year') return 'last_6months';
+      return 'last_6months'; // Fallback
+    }
+    
+    // Default-Fallback
+    return 'last_year';
   };
 
   // Effekt zum Laden der historischen Daten (Wert B) für den Vergleich mit sich selbst
@@ -176,17 +159,31 @@ const QuotasPage: React.FC = () => {
         // Wir ermitteln das passende historische Zeitintervall basierend auf der aktuellen Auswahl
         const historicalTimePeriod = getHistoricalTimePeriod(timePeriod, historicalPeriod);
         
-        console.log(`Aktueller Zeitraum: ${timePeriod}, Vergleichszeitraum: ${historicalPeriod}`);
-        console.log(`Fetching historical data with time period: ${historicalTimePeriod}`);
+        console.log("-------- HISTORICAL DATA REQUEST --------");
+        console.log(`Aktueller Zeitraum: ${timePeriod}`);
+        console.log(`Ausgewählter Vergleichszeitraum: ${historicalPeriod}`);
+        console.log(`Tatsächlich verwendeter API-Zeitraum: ${historicalTimePeriod}`);
         
         // Die normale API mit historischem Zeitraum aufrufen
+        console.log(`Fetching data for agency ${selectedAgency.agency_id} with time period: ${historicalTimePeriod}`);
         const historicalData = await apiService.getAgencyQuotas(
           selectedAgency.agency_id, 
           historicalTimePeriod
         );
         
+        console.log("Received historical data:", historicalData);
+        console.log("Selected agency in historical data:", historicalData?.selected_agency);
+        
+        // Wenn wir Reservierungsrate vergleichen wollen, überprüfen wir, ob die Daten vorhanden sind
+        if (historicalData?.selected_agency?.reservation_rate) {
+          console.log(`Historical reservation rate: ${historicalData.selected_agency.reservation_rate}`);
+        } else {
+          console.warn("Historical reservation rate is missing in the response");
+        }
+        
+        // Aktualisiere den State
         setHistoricalQuotasData(historicalData);
-        console.log("Historical Quotas Data:", historicalData);
+        console.log("-------- END OF HISTORICAL DATA REQUEST --------");
       } catch (err) {
         console.error('Error fetching historical data:', err);
         setError(`Fehler beim Laden der historischen Daten für den Zeitraum ${historicalPeriod}`);
@@ -196,9 +193,11 @@ const QuotasPage: React.FC = () => {
     };
     
     if (comparisonType === 'historical') {
+      console.log("Historical comparison selected, fetching data...");
       fetchHistoricalQuotasData();
     } else {
       // Zurücksetzen der historischen Daten, wenn ein anderer Vergleichstyp ausgewählt ist
+      console.log("Non-historical comparison selected, clearing historical data");
       setHistoricalQuotasData(null);
     }
   }, [selectedAgency, comparisonType, historicalPeriod, timePeriod]);
@@ -433,9 +432,23 @@ const QuotasPage: React.FC = () => {
   // Hilfsfunktion zur besseren Lesbarkeit - gibt entweder den Vergleichswert oder den Durchschnittswert zurück
   const getComparisonValue = (fieldName: string) => {
     const compData = getComparisonData();
+    
+    // Logging für Debugging-Zwecke
+    console.log(`Requesting comparison value for field: ${fieldName}`);
+    console.log(`Current comparison type: ${comparisonType}`);
+    console.log(`Historical period: ${historicalPeriod}`);
+    console.log(`Comparison data available:`, compData ? 'Yes' : 'No');
+    if (compData) {
+      console.log(`Field value in comparison data:`, compData[fieldName]);
+    }
+    
     if (comparisonType === 'historical' && compData) {
-      return compData[fieldName];
+      // Stelle sicher, dass wir den Wert zum richtigen Zeitraum anzeigen
+      const histValue = compData[fieldName];
+      console.log(`Historical value for ${fieldName}:`, histValue);
+      return histValue;
     } else if (comparisonType === 'agency' && compData) {
+      // Vergleichsagentur-Wert
       return compData[fieldName];
     } else {
       // Fallback auf Durchschnitt wenn keine Vergleichsdaten vorhanden oder Durchschnitt ausgewählt
