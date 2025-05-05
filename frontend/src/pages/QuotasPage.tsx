@@ -1258,6 +1258,78 @@ const QuotasPage: React.FC = () => {
   const formatArrivalRate = (path: string, defaultValue: number = 0): string => {
     return formatPercentage(getArrivalMetric(path, defaultValue) * 100);
   };
+  
+  // Importiert vom TimeFilter, formatiert ein Datum im deutschen Format
+  const formatGermanDate = (dateStr: string): string => {
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+  };
+  
+  // Berechnet den Datumsbereich für den aktuellen Zeitraum
+  const getCurrentDateRange = (): { startDate: string, endDate: string } => {
+    const now = new Date();
+    let startDate: Date;
+    const endDate: Date = now;
+
+    switch (timePeriod) {
+      case 'last_month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        break;
+      case 'last_quarter':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+        break;
+      case 'last_year':
+        startDate = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+        break;
+      case 'all_time':
+        startDate = new Date(2000, 0, 1); // Frühes Datum für "all time"
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+    }
+
+    return {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0]
+    };
+  };
+  
+  // Berechnet den Datumsbereich für den historischen Vergleichszeitraum
+  const getHistoricalDateRange = (): { startDate: string, endDate: string } => {
+    const currentRange = getCurrentDateRange();
+    const historicalTimePeriod = getHistoricalTimePeriod(timePeriod, historicalPeriod);
+    const now = new Date();
+    let startDate: Date;
+    let endDate: Date;
+
+    switch (historicalTimePeriod) {
+      case 'last_month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() - 1, 0);
+        break;
+      case 'last_quarter':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() - 3, 0);
+        break;
+      case 'last_year':
+        startDate = new Date(now.getFullYear() - 2, now.getMonth(), 1);
+        endDate = new Date(now.getFullYear() - 1, now.getMonth() + 1, 0);
+        break;
+      case 'last_6months':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 9, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() - 3, 0);
+        break;
+      default:
+        startDate = new Date(now.getFullYear() - 1, now.getMonth() - 3, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() - 3, 0);
+    }
+
+    return {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0]
+    };
+  };
 
   return (
     <div className="quotas-page">
@@ -1291,12 +1363,13 @@ const QuotasPage: React.FC = () => {
             </div>
           </div>
           <div className="relative inline-block">
-            <div className="flex items-center">
-              <span className="mr-2 text-sm font-medium text-gray-700 dark:text-gray-300">Vergleichsansicht:</span>
-              <select 
-                className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={comparisonType}
-                onChange={handleComparisonTypeChange}
+            <div className="flex flex-col">
+              <div className="flex items-center">
+                <span className="mr-2 text-sm font-medium text-gray-700 dark:text-gray-300">Vergleichsansicht:</span>
+                <select 
+                  className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={comparisonType}
+                  onChange={handleComparisonTypeChange}
               >
                 <option value="average">Mit Durchschnitt</option>
                 <option value="historical">Mit sich selbst</option>
@@ -1308,6 +1381,28 @@ const QuotasPage: React.FC = () => {
                 </svg>
               </div>
             </div>
+            
+            {/* Datumsanzeige für Vergleichszeiträume */}
+            {comparisonType === 'historical' && (
+              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <div className="flex flex-col">
+                  <div className="flex">
+                    <span className="font-semibold mr-1">Aktuell:</span>
+                    {(() => {
+                      const { startDate, endDate } = getCurrentDateRange();
+                      return `${formatGermanDate(startDate)} - ${formatGermanDate(endDate)}`;
+                    })()}
+                  </div>
+                  <div className="flex">
+                    <span className="font-semibold mr-1">{getComparisonLabel()}:</span>
+                    {(() => {
+                      const { startDate, endDate } = getHistoricalDateRange();
+                      return `${formatGermanDate(startDate)} - ${formatGermanDate(endDate)}`;
+                    })()}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           
           {comparisonType === 'agency' && (
