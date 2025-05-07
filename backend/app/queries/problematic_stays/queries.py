@@ -14,7 +14,7 @@ WITH total_carestays AS (
   FROM
     `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays`
   WHERE
-    agency_id = @agency_id OR @agency_id IS NULL
+    (agency_id = @agency_id OR @agency_id IS NULL)
     AND created_at BETWEEN @start_date AND @end_date
   GROUP BY
     agency_id
@@ -35,10 +35,10 @@ problematic_stats AS (
     COUNTIF(p.stay_type = 'follow_stay') AS follow_stay_count,
     
     -- Kombinierte Aufschlüsselung
-    COUNTIF(p.event_type = 'cancelled_before_arrival' AND p.stay_type = 'first_stay') AS cancelled_first_stays,
-    COUNTIF(p.event_type = 'cancelled_before_arrival' AND p.stay_type = 'follow_stay') AS cancelled_follow_stays,
-    COUNTIF(p.event_type = 'shortened_after_arrival' AND p.stay_type = 'first_stay') AS shortened_first_stays,
-    COUNTIF(p.event_type = 'shortened_after_arrival' AND p.stay_type = 'follow_stay') AS shortened_follow_stays,
+    COUNTIF(p.event_type = 'cancelled_before_arrival' AND p.stay_type = 'first_stay') AS first_stay_cancelled_count,
+    COUNTIF(p.event_type = 'cancelled_before_arrival' AND p.stay_type = 'follow_stay') AS follow_stay_cancelled_count,
+    COUNTIF(p.event_type = 'shortened_after_arrival' AND p.stay_type = 'first_stay') AS first_stay_shortened_count,
+    COUNTIF(p.event_type = 'shortened_after_arrival' AND p.stay_type = 'follow_stay') AS follow_stay_shortened_count,
     
     -- Ersatz-Statistiken
     COUNTIF(p.has_replacement = TRUE) AS with_replacement_count,
@@ -48,9 +48,41 @@ problematic_stats AS (
     COUNTIF(p.instant_departure_after IS NOT NULL) AS instant_departure_count,
     AVG(CASE WHEN p.instant_departure_after IS NOT NULL THEN p.instant_departure_after ELSE NULL END) AS avg_instant_departure_days,
     
+    -- Sofortige Abreise (<10 Tage) aufgeschlüsselt nach Tagen
+    COUNTIF(p.instant_departure_after = 1) AS instant_departure_day_1,
+    COUNTIF(p.instant_departure_after = 2) AS instant_departure_day_2,
+    COUNTIF(p.instant_departure_after = 3) AS instant_departure_day_3,
+    COUNTIF(p.instant_departure_after = 4) AS instant_departure_day_4,
+    COUNTIF(p.instant_departure_after = 5) AS instant_departure_day_5,
+    COUNTIF(p.instant_departure_after = 6) AS instant_departure_day_6,
+    COUNTIF(p.instant_departure_after = 7) AS instant_departure_day_7,
+    COUNTIF(p.instant_departure_after = 8) AS instant_departure_day_8,
+    COUNTIF(p.instant_departure_after = 9) AS instant_departure_day_9,
+    
+    -- Vorlaufzeit und Verkürzungsdauer zeitliche Gruppierung
+    -- Für Abbrüche vor Anreise
+    COUNTIF(p.event_type = 'cancelled_before_arrival' AND p.days_difference <= 3) AS cancelled_1_3_days,
+    COUNTIF(p.event_type = 'cancelled_before_arrival' AND p.days_difference > 3 AND p.days_difference <= 7) AS cancelled_4_7_days,
+    COUNTIF(p.event_type = 'cancelled_before_arrival' AND p.days_difference > 7 AND p.days_difference <= 14) AS cancelled_8_14_days,
+    COUNTIF(p.event_type = 'cancelled_before_arrival' AND p.days_difference > 14 AND p.days_difference <= 30) AS cancelled_15_30_days,
+    COUNTIF(p.event_type = 'cancelled_before_arrival' AND p.days_difference > 30) AS cancelled_over_30_days,
+    
+    -- Für Verkürzungen nach Anreise
+    COUNTIF(p.event_type = 'shortened_after_arrival' AND p.days_difference >= 14 AND p.days_difference <= 21) AS shortened_14_21_days,
+    COUNTIF(p.event_type = 'shortened_after_arrival' AND p.days_difference > 21 AND p.days_difference <= 30) AS shortened_22_30_days,
+    COUNTIF(p.event_type = 'shortened_after_arrival' AND p.days_difference > 30 AND p.days_difference <= 60) AS shortened_31_60_days,
+    COUNTIF(p.event_type = 'shortened_after_arrival' AND p.days_difference > 60 AND p.days_difference <= 90) AS shortened_61_90_days,
+    COUNTIF(p.event_type = 'shortened_after_arrival' AND p.days_difference > 90) AS shortened_over_90_days,
+    
     -- Zeitleiche Analysen
     AVG(CASE WHEN p.event_type = 'cancelled_before_arrival' THEN p.days_difference ELSE NULL END) AS avg_days_before_arrival,
     AVG(CASE WHEN p.event_type = 'shortened_after_arrival' THEN p.days_difference ELSE NULL END) AS avg_shortened_days,
+    
+    -- Zeitleiche Analysen nach stay_type
+    AVG(CASE WHEN p.event_type = 'cancelled_before_arrival' AND p.stay_type = 'first_stay' THEN p.days_difference ELSE NULL END) AS first_stay_avg_days_before_arrival,
+    AVG(CASE WHEN p.event_type = 'cancelled_before_arrival' AND p.stay_type = 'follow_stay' THEN p.days_difference ELSE NULL END) AS follow_stay_avg_days_before_arrival,
+    AVG(CASE WHEN p.event_type = 'shortened_after_arrival' AND p.stay_type = 'first_stay' THEN p.days_difference ELSE NULL END) AS first_stay_avg_shortened_days,
+    AVG(CASE WHEN p.event_type = 'shortened_after_arrival' AND p.stay_type = 'follow_stay' THEN p.days_difference ELSE NULL END) AS follow_stay_avg_shortened_days,
     
     -- Kundenzufriedenheitsstatistik (aus JSON extrahiert)
     COUNTIF(JSON_EXTRACT_SCALAR(p.analysis_result, '$.customer_satisfaction') = 'satisfied') AS satisfied_count,
@@ -65,8 +97,7 @@ problematic_stats AS (
   WHERE
     p.analysis_status = 'completed'
     AND (p.agency_id = @agency_id OR @agency_id IS NULL)
-    AND (p.event_date BETWEEN @start_date AND @end_date OR 
-         (@start_date IS NULL AND @end_date IS NULL))
+    AND p.event_date BETWEEN @start_date AND @end_date
   GROUP BY
     p.agency_id, p.agency_name
 )
@@ -91,10 +122,10 @@ SELECT
   SAFE_DIVIDE(p.follow_stay_count, p.total_problematic) * 100 AS follow_stay_percentage,
   
   -- Kombinierte Statistiken
-  p.cancelled_first_stays,
-  p.cancelled_follow_stays,
-  p.shortened_first_stays,
-  p.shortened_follow_stays,
+  p.first_stay_cancelled_count,
+  p.follow_stay_cancelled_count,
+  p.first_stay_shortened_count,
+  p.follow_stay_shortened_count,
   
   -- Ersatz-Statistiken
   p.with_replacement_count,
@@ -107,9 +138,36 @@ SELECT
   p.avg_instant_departure_days,
   SAFE_DIVIDE(p.instant_departure_count, p.shortened_after_arrival_count) * 100 AS instant_departure_percentage,
   
+  -- Sofortige Abreise nach Tagen
+  p.instant_departure_day_1,
+  p.instant_departure_day_2,
+  p.instant_departure_day_3,
+  p.instant_departure_day_4,
+  p.instant_departure_day_5,
+  p.instant_departure_day_6,
+  p.instant_departure_day_7,
+  p.instant_departure_day_8,
+  p.instant_departure_day_9,
+  
+  -- Gruppierung nach Tagen
+  p.cancelled_1_3_days,
+  p.cancelled_4_7_days,
+  p.cancelled_8_14_days,
+  p.cancelled_15_30_days,
+  p.cancelled_over_30_days,
+  p.shortened_14_21_days,
+  p.shortened_22_30_days,
+  p.shortened_31_60_days,
+  p.shortened_61_90_days,
+  p.shortened_over_90_days,
+  
   -- Zeitliche Analysen
   p.avg_days_before_arrival,
   p.avg_shortened_days,
+  p.first_stay_avg_days_before_arrival,
+  p.follow_stay_avg_days_before_arrival,
+  p.first_stay_avg_shortened_days,
+  p.follow_stay_avg_shortened_days,
   
   -- Kundenzufriedenheitsstatistik
   p.satisfied_count,
@@ -146,8 +204,7 @@ FROM
 WHERE
   p.analysis_status = 'completed'
   AND (p.agency_id = @agency_id OR @agency_id IS NULL)
-  AND (p.event_date BETWEEN @start_date AND @end_date OR 
-       (@start_date IS NULL AND @end_date IS NULL))
+  AND p.event_date BETWEEN @start_date AND @end_date
   AND (p.event_type = @event_type OR @event_type IS NULL)
 GROUP BY
   p.agency_id, p.agency_name, p.event_type, reason
@@ -174,8 +231,7 @@ FROM
 WHERE
   p.analysis_status = 'completed'
   AND (p.agency_id = @agency_id OR @agency_id IS NULL)
-  AND (p.event_date BETWEEN @start_date AND @end_date OR 
-       (@start_date IS NULL AND @end_date IS NULL))
+  AND p.event_date BETWEEN @start_date AND @end_date
   AND (p.event_type = @event_type OR @event_type IS NULL)
   AND (p.stay_type = @stay_type OR @stay_type IS NULL)
 GROUP BY
