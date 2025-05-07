@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
-from .routes import agencies, quotas, reaction_times, profile_quality, quotas_with_reasons
+from .routes import agencies, quotas, reaction_times, profile_quality, quotas_with_reasons, problematic_stays
 from .dependencies import get_settings
 
 # Load environment variables
@@ -30,6 +30,7 @@ app.include_router(quotas.router, prefix="/api/quotas", tags=["quotas"])
 app.include_router(quotas_with_reasons.router, prefix="/api/quotas_with_reasons", tags=["quotas with reasons"])
 app.include_router(reaction_times.router, prefix="/api/reaction_times", tags=["reaction times"])
 app.include_router(profile_quality.router, prefix="/api/profile_quality", tags=["profile quality"])
+app.include_router(problematic_stays.router, prefix="/api/problematic_stays", tags=["problematic stays"])
 
 @app.get("/api/health")
 async def health_check():
