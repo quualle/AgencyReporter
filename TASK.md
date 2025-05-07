@@ -241,38 +241,38 @@ Das Ergebnis wird als JSON gespeichert mit folgender Struktur:
 ## 13. Implementierung des Problematic Stays Dashboards
 
 ### 13.1 Frontend-Komponenten für das Übersichtsdashboard
-- [ ] **Hauptstatistik-Widget erstellen**
-  - [ ] Komponente für KPI-Kacheln entwickeln (Gesamtzahl problematischer Einsätze, Abbrüche vor Anreise, vorzeitige Beendigungen, sofortige Abreisen)
-  - [ ] Vergleichswerte zum Durchschnitt/Vorperiode hinzufügen
-  - [ ] Trend-Indikatoren (Pfeile) für Entwicklung implementieren
-  - [ ] Mit `/api/problematic_stays/overview` API-Endpunkt verbinden
-  - [ ] Filter für Zeitraum implementieren
+- [x] **Hauptstatistik-Widget erstellen**
+  - [x] Komponente für KPI-Kacheln entwickeln (Gesamtzahl problematischer Einsätze, Abbrüche vor Anreise, vorzeitige Beendigungen, sofortige Abreisen)
+  - [x] Vergleichswerte zum Durchschnitt/Vorperiode hinzufügen
+  - [x] Trend-Indikatoren (Pfeile) für Entwicklung implementieren
+  - [x] Mit `/api/problematic_stays/overview` API-Endpunkt verbinden
+  - [x] Filter für Zeitraum implementieren
 
-- [ ] **Verteilungsdiagramm erstellen**
-  - [ ] Säulendiagramm zur Darstellung der Verteilung nach Problemtyp und Einsatztyp
-  - [ ] Farbliche Differenzierung zwischen first_stay und follow_stay
-  - [ ] Tooltip mit detaillierten Informationen
-  - [ ] Mit `/api/problematic_stays/overview` API-Endpunkt verbinden
-  - [ ] Responsive Design für verschiedene Bildschirmgrößen
+- [x] **Verteilungsdiagramm erstellen**
+  - [x] Säulendiagramm zur Darstellung der Verteilung nach Problemtyp und Einsatztyp
+  - [x] Farbliche Differenzierung zwischen first_stay und follow_stay
+  - [x] Tooltip mit detaillierten Informationen
+  - [x] Mit `/api/problematic_stays/overview` API-Endpunkt verbinden
+  - [x] Responsive Design für verschiedene Bildschirmgrößen
 
 ### 13.2 Widgets für zeitliche Analyse
-- [ ] **Vorlaufzeit-Analyse-Widget erstellen**
-  - [ ] Box-Plot oder ähnliches Diagramm zur Darstellung der Vorlaufzeit bei Abbrüchen
-  - [ ] Durchschnittslinie implementieren
-  - [ ] Mit `/api/problematic_stays/time-analysis` API-Endpunkt verbinden
-  - [ ] Filter für event_type="cancelled_before_arrival" implementieren
+- [x] **Vorlaufzeit-Analyse-Widget erstellen**
+  - [x] Box-Plot oder ähnliches Diagramm zur Darstellung der Vorlaufzeit bei Abbrüchen
+  - [x] Durchschnittslinie implementieren
+  - [x] Mit `/api/problematic_stays/time-analysis` API-Endpunkt verbinden
+  - [x] Filter für event_type="cancelled_before_arrival" implementieren
 
-- [ ] **Verkürzungsdauer-Analyse-Widget erstellen**
-  - [ ] Diagramm zur Darstellung der Verkürzungsdauer
-  - [ ] Markierung kritischer Bereiche (>30 Tage)
-  - [ ] Mit `/api/problematic_stays/time-analysis` API-Endpunkt verbinden
-  - [ ] Filter für event_type="shortened_after_arrival" implementieren
+- [x] **Verkürzungsdauer-Analyse-Widget erstellen**
+  - [x] Diagramm zur Darstellung der Verkürzungsdauer
+  - [x] Markierung kritischer Bereiche (>30 Tage)
+  - [x] Mit `/api/problematic_stays/time-analysis` API-Endpunkt verbinden
+  - [x] Filter für event_type="shortened_after_arrival" implementieren
 
-- [ ] **Sofortige-Abreise-Widget erstellen**
-  - [ ] Balkendiagramm für Einsätze mit sofortiger Abreise (<10 Tage)
-  - [ ] Filtern der Daten für instant_departure_after IS NOT NULL
-  - [ ] Gruppierung nach Tagen (1-9)
-  - [ ] Mit `/api/problematic_stays/overview` oder spezieller Abfrage verbinden
+- [x] **Sofortige-Abreise-Widget erstellen**
+  - [x] Balkendiagramm für Einsätze mit sofortiger Abreise (<10 Tage)
+  - [x] Filtern der Daten für instant_departure_after IS NOT NULL
+  - [x] Gruppierung nach Tagen (1-9)
+  - [x] Mit `/api/problematic_stays/overview` oder spezieller Abfrage verbinden
 
 ### 13.3 Widgets für Ersatz- und Folgeanalyse
 - [ ] **Ersatzbereitstellungs-Widget erstellen**

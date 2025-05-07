@@ -7,12 +7,15 @@ import ExportButton from '../components/common/ExportButton';
 import TimeFilter from '../components/common/TimeFilter';
 import OverviewWidget from '../components/problematic_stays/OverviewWidget';
 import DistributionWidget from '../components/problematic_stays/DistributionWidget';
+import TimeAnalysisWidget from '../components/problematic_stays/TimeAnalysisWidget';
+import InstantDepartureWidget from '../components/problematic_stays/InstantDepartureWidget';
 
 const StrengthWeaknessPage: React.FC = () => {
   const { selectedAgency, timePeriod } = useAppStore();
   
   const [overviewData, setOverviewData] = useState<any>(null);
   const [reasonsData, setReasonsData] = useState<any>(null);
+  const [timeAnalysisData, setTimeAnalysisData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,6 +41,14 @@ const StrengthWeaknessPage: React.FC = () => {
           setReasonsData(reasonsResponse);
         } catch (err) {
           console.error('Error fetching problematic stays reasons:', err);
+        }
+        
+        // Fetch time analysis data
+        try {
+          const timeAnalysisResponse = await apiService.getProblematicStaysTimeAnalysis(selectedAgency.agency_id, undefined, undefined, timePeriod);
+          setTimeAnalysisData(timeAnalysisResponse);
+        } catch (err) {
+          console.error('Error fetching problematic stays time analysis:', err);
         }
         
       } catch (err) {
@@ -117,26 +128,29 @@ const StrengthWeaknessPage: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Abbrüche vor Anreise</h2>
-              
-              {/* Hier wird später das Widget für Abbrüche vor Anreise platziert */}
-              <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg text-center">
-                <p className="text-gray-600 dark:text-gray-300">
-                  Abbruch-Widget wird geladen...
-                </p>
-              </div>
+              <TimeAnalysisWidget 
+                data={timeAnalysisData?.data || []} 
+                isLoading={isLoading} 
+                eventType="cancelled_before_arrival"
+                title="Vorlaufzeit bei Abbrüchen"
+              />
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Vorzeitige Beendigungen</h2>
-              
-              {/* Hier wird später das Widget für vorzeitige Beendigungen platziert */}
-              <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg text-center">
-                <p className="text-gray-600 dark:text-gray-300">
-                  Beendigungs-Widget wird geladen...
-                </p>
-              </div>
+              <TimeAnalysisWidget 
+                data={timeAnalysisData?.data || []} 
+                isLoading={isLoading} 
+                eventType="shortened_after_arrival"
+                title="Verkürzungsdauer-Analyse"
+              />
             </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+            <InstantDepartureWidget 
+              data={overviewData.data} 
+              isLoading={isLoading}
+            />
           </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
