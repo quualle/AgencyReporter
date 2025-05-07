@@ -1,5 +1,23 @@
 import React from 'react';
-import { FaArrowUp, FaArrowDown, FaEquals } from 'react-icons/fa';
+
+// Eigene Icon-Komponenten anstelle von react-icons
+const IconArrowUp = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500 ml-1" viewBox="0 0 20 20" fill="currentColor">
+    <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+  </svg>
+);
+
+const IconArrowDown = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500 ml-1" viewBox="0 0 20 20" fill="currentColor">
+    <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+  </svg>
+);
+
+const IconEquals = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500 ml-1" viewBox="0 0 20 20" fill="currentColor">
+    <path fillRule="evenodd" d="M4 9h12a1 1 0 010 2H4a1 1 0 110-2zm0-4h12a1 1 0 110 2H4a1 1 0 010-2z" clipRule="evenodd" />
+  </svg>
+);
 
 interface OverviewWidgetProps {
   data: any[];
@@ -24,11 +42,11 @@ const OverviewWidget: React.FC<OverviewWidgetProps> = ({ data, isLoading }) => {
   // Trend-Indikator-Komponente
   const TrendIndicator = ({ value }: { value: number }) => {
     if (value > 0) {
-      return <FaArrowUp className="text-red-500 ml-1" />; // Steigend ist negativ
+      return <IconArrowUp />; // Steigend ist negativ
     } else if (value < 0) {
-      return <FaArrowDown className="text-green-500 ml-1" />; // Fallend ist positiv
+      return <IconArrowDown />; // Fallend ist positiv
     } else {
-      return <FaEquals className="text-gray-500 ml-1" />; // Gleichbleibend
+      return <IconEquals />; // Gleichbleibend
     }
   };
 

@@ -82,6 +82,10 @@ const StrengthWeaknessPage: React.FC = () => {
   // Prüfen, ob Daten vorhanden sind
   const hasData = overviewData && overviewData.data && overviewData.data.length > 0;
 
+  // Für Debug-Zwecke: Log der API-Antwort
+  console.log("Overview Data:", overviewData);
+  console.log("Time Analysis Data:", timeAnalysisData);
+
   return (
     <div className="strength-weakness-page">
       <div className="mb-6 flex justify-between items-center">

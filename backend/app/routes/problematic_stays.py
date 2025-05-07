@@ -7,7 +7,12 @@ from ..dependencies import get_settings
 from ..queries.problematic_stays.queries import (
     GET_PROBLEMATIC_STAYS_OVERVIEW,
     GET_PROBLEMATIC_STAYS_REASONS,
-    GET_PROBLEMATIC_STAYS_TIME_ANALYSIS
+    GET_PROBLEMATIC_STAYS_TIME_ANALYSIS,
+    GET_PROBLEMATIC_STAYS_HEATMAP,
+    GET_PROBLEMATIC_STAYS_INSTANT_DEPARTURES,
+    GET_PROBLEMATIC_STAYS_REPLACEMENT_ANALYSIS,
+    GET_PROBLEMATIC_STAYS_CUSTOMER_SATISFACTION,
+    GET_PROBLEMATIC_STAYS_TREND_ANALYSIS
 )
 from datetime import datetime, timedelta
 
@@ -325,4 +330,362 @@ async def get_problematic_stays_detailed(
             "limit": limit
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch detailed problematic stays: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to fetch detailed problematic stays: {str(e)}")
+
+@router.get("/heatmap")
+async def get_problematic_stays_heatmap(
+    agency_id: Optional[str] = QueryParam(None),
+    event_type: Optional[str] = QueryParam(None, regex="^(cancelled_before_arrival|shortened_after_arrival|)$"),
+    stay_type: Optional[str] = QueryParam(None, regex="^(first_stay|follow_stay|)$"),
+    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Heatmap-Analyse der Abbruchgründe nach Agentur.
+    Liefert eine Übersicht der Häufigkeit verschiedener Abbruchgründe gruppiert nach Agenturen.
+    """
+    try:
+        # Setup date range based on time_period
+        today = datetime.now()
+        
+        if time_period == "last_month":
+            start_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+        elif time_period == "last_quarter":
+            start_date = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+        elif time_period == "last_year":
+            start_date = (today - timedelta(days=365)).strftime("%Y-%m-%d")
+        else:  # all_time
+            start_date = "2020-01-01"  # Earliest relevant data
+            
+        end_date = today.strftime("%Y-%m-%d")
+        
+        # Execute the query with parameters
+        connection = BigQueryConnection()
+        query_params = {
+            "agency_id": agency_id,
+            "event_type": event_type,
+            "stay_type": stay_type,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        
+        results = connection.execute_query(GET_PROBLEMATIC_STAYS_HEATMAP, query_params)
+        
+        # Process and format the results
+        if not results or len(results) == 0:
+            # Return empty results if no data found
+            return {
+                "agency_id": agency_id,
+                "event_type": event_type,
+                "stay_type": stay_type,
+                "time_period": time_period,
+                "start_date": start_date,
+                "end_date": end_date,
+                "data": [],
+                "count": 0
+            }
+        
+        # Process the results into a list of dictionaries
+        heatmap_data = []
+        for row in results:
+            # Convert BigQuery row to dictionary
+            heatmap_item = dict(row.items())
+            # Round float values for better readability
+            for key, value in heatmap_item.items():
+                if isinstance(value, float):
+                    heatmap_item[key] = round(value, 2)
+            heatmap_data.append(heatmap_item)
+            
+        return {
+            "agency_id": agency_id,
+            "event_type": event_type,
+            "stay_type": stay_type,
+            "time_period": time_period,
+            "start_date": start_date,
+            "end_date": end_date,
+            "data": heatmap_data,
+            "count": len(heatmap_data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays heatmap: {str(e)}")
+
+@router.get("/instant-departures")
+async def get_problematic_stays_instant_departures(
+    agency_id: Optional[str] = QueryParam(None),
+    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Analyse der sofortigen Abreisen (< 10 Tage nach Anreise).
+    Liefert detaillierte Informationen zu Einsätzen, die innerhalb von 10 Tagen nach Anreise beendet wurden.
+    """
+    try:
+        # Setup date range based on time_period
+        today = datetime.now()
+        
+        if time_period == "last_month":
+            start_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+        elif time_period == "last_quarter":
+            start_date = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+        elif time_period == "last_year":
+            start_date = (today - timedelta(days=365)).strftime("%Y-%m-%d")
+        else:  # all_time
+            start_date = "2020-01-01"  # Earliest relevant data
+            
+        end_date = today.strftime("%Y-%m-%d")
+        
+        # Execute the query with parameters
+        connection = BigQueryConnection()
+        query_params = {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        
+        results = connection.execute_query(GET_PROBLEMATIC_STAYS_INSTANT_DEPARTURES, query_params)
+        
+        # Process and format the results
+        if not results or len(results) == 0:
+            # Return empty results if no data found
+            return {
+                "agency_id": agency_id,
+                "time_period": time_period,
+                "start_date": start_date,
+                "end_date": end_date,
+                "data": [],
+                "count": 0
+            }
+        
+        # Process the results into a list of dictionaries
+        departures_data = []
+        for row in results:
+            # Convert BigQuery row to dictionary
+            departure_item = dict(row.items())
+            # Round float values for better readability
+            for key, value in departure_item.items():
+                if isinstance(value, float):
+                    departure_item[key] = round(value, 2)
+            departures_data.append(departure_item)
+            
+        return {
+            "agency_id": agency_id,
+            "time_period": time_period,
+            "start_date": start_date,
+            "end_date": end_date,
+            "data": departures_data,
+            "count": len(departures_data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays instant departures: {str(e)}")
+
+@router.get("/replacement-analysis")
+async def get_problematic_stays_replacement_analysis(
+    agency_id: Optional[str] = QueryParam(None),
+    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Analyse der Ersatz- und Folgestatistiken.
+    Liefert Informationen darüber, wie oft Ersatz für abgebrochene Einsätze oder Folgeeinsätze
+    für verkürzte Einsätze gestellt werden.
+    """
+    try:
+        # Setup date range based on time_period
+        today = datetime.now()
+        
+        if time_period == "last_month":
+            start_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+        elif time_period == "last_quarter":
+            start_date = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+        elif time_period == "last_year":
+            start_date = (today - timedelta(days=365)).strftime("%Y-%m-%d")
+        else:  # all_time
+            start_date = "2020-01-01"  # Earliest relevant data
+            
+        end_date = today.strftime("%Y-%m-%d")
+        
+        # Execute the query with parameters
+        connection = BigQueryConnection()
+        query_params = {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        
+        results = connection.execute_query(GET_PROBLEMATIC_STAYS_REPLACEMENT_ANALYSIS, query_params)
+        
+        # Process and format the results
+        if not results or len(results) == 0:
+            # Return empty results if no data found
+            return {
+                "agency_id": agency_id,
+                "time_period": time_period,
+                "start_date": start_date,
+                "end_date": end_date,
+                "data": [],
+                "count": 0
+            }
+        
+        # Process the results into a list of dictionaries
+        replacement_data = []
+        for row in results:
+            # Convert BigQuery row to dictionary
+            replacement_item = dict(row.items())
+            # Round float values for better readability
+            for key, value in replacement_item.items():
+                if isinstance(value, float):
+                    replacement_item[key] = round(value, 2)
+            replacement_data.append(replacement_item)
+            
+        return {
+            "agency_id": agency_id,
+            "time_period": time_period,
+            "start_date": start_date,
+            "end_date": end_date,
+            "data": replacement_data,
+            "count": len(replacement_data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays replacement analysis: {str(e)}")
+
+@router.get("/customer-satisfaction")
+async def get_problematic_stays_customer_satisfaction(
+    agency_id: Optional[str] = QueryParam(None),
+    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Analyse der Kundenzufriedenheit bei problematischen Einsätzen.
+    Liefert Informationen zur Verteilung der Kundenzufriedenheit und deren
+    Zusammenhang mit Abbruchgründen.
+    """
+    try:
+        # Setup date range based on time_period
+        today = datetime.now()
+        
+        if time_period == "last_month":
+            start_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+        elif time_period == "last_quarter":
+            start_date = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+        elif time_period == "last_year":
+            start_date = (today - timedelta(days=365)).strftime("%Y-%m-%d")
+        else:  # all_time
+            start_date = "2020-01-01"  # Earliest relevant data
+            
+        end_date = today.strftime("%Y-%m-%d")
+        
+        # Execute the query with parameters
+        connection = BigQueryConnection()
+        query_params = {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        
+        results = connection.execute_query(GET_PROBLEMATIC_STAYS_CUSTOMER_SATISFACTION, query_params)
+        
+        # Process and format the results
+        if not results or len(results) == 0:
+            # Return empty results if no data found
+            return {
+                "agency_id": agency_id,
+                "time_period": time_period,
+                "start_date": start_date,
+                "end_date": end_date,
+                "data": [],
+                "count": 0
+            }
+        
+        # Process the results into a list of dictionaries
+        satisfaction_data = []
+        for row in results:
+            # Convert BigQuery row to dictionary
+            satisfaction_item = dict(row.items())
+            # Round float values for better readability
+            for key, value in satisfaction_item.items():
+                if isinstance(value, float):
+                    satisfaction_item[key] = round(value, 2)
+            satisfaction_data.append(satisfaction_item)
+            
+        return {
+            "agency_id": agency_id,
+            "time_period": time_period,
+            "start_date": start_date,
+            "end_date": end_date,
+            "data": satisfaction_data,
+            "count": len(satisfaction_data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays customer satisfaction: {str(e)}")
+
+@router.get("/trend-analysis")
+async def get_problematic_stays_trend_analysis(
+    agency_id: Optional[str] = QueryParam(None),
+    event_type: Optional[str] = QueryParam(None, regex="^(cancelled_before_arrival|shortened_after_arrival|)$"),
+    stay_type: Optional[str] = QueryParam(None, regex="^(first_stay|follow_stay|)$"),
+    time_period: str = QueryParam("last_year", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Zeitliche Trendanalyse der problematischen Einsätze.
+    Liefert Informationen zur monatlichen Entwicklung problematischer Einsätze über Zeit.
+    """
+    try:
+        # Setup date range based on time_period
+        today = datetime.now()
+        
+        if time_period == "last_month":
+            start_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+        elif time_period == "last_quarter":
+            start_date = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+        elif time_period == "last_year":
+            start_date = (today - timedelta(days=365)).strftime("%Y-%m-%d")
+        else:  # all_time
+            start_date = "2020-01-01"  # Earliest relevant data
+            
+        end_date = today.strftime("%Y-%m-%d")
+        
+        # Execute the query with parameters
+        connection = BigQueryConnection()
+        query_params = {
+            "agency_id": agency_id,
+            "event_type": event_type,
+            "stay_type": stay_type,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        
+        results = connection.execute_query(GET_PROBLEMATIC_STAYS_TREND_ANALYSIS, query_params)
+        
+        # Process and format the results
+        if not results or len(results) == 0:
+            # Return empty results if no data found
+            return {
+                "agency_id": agency_id,
+                "event_type": event_type,
+                "stay_type": stay_type,
+                "time_period": time_period,
+                "start_date": start_date,
+                "end_date": end_date,
+                "data": [],
+                "count": 0
+            }
+        
+        # Process the results into a list of dictionaries
+        trend_data = []
+        for row in results:
+            # Convert BigQuery row to dictionary
+            trend_item = dict(row.items())
+            # Round float values for better readability
+            for key, value in trend_item.items():
+                if isinstance(value, float):
+                    trend_item[key] = round(value, 2)
+            trend_data.append(trend_item)
+            
+        return {
+            "agency_id": agency_id,
+            "event_type": event_type,
+            "stay_type": stay_type,
+            "time_period": time_period,
+            "start_date": start_date,
+            "end_date": end_date,
+            "data": trend_data,
+            "count": len(trend_data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays trend analysis: {str(e)}") 

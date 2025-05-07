@@ -31,6 +31,24 @@ GROUP BY
     a.name
 """
 
+# New query to get unique posting reservations per agency
+GET_UNIQUE_POSTING_RESERVATIONS = """
+SELECT
+    COUNT(DISTINCT v.posting_id) AS anzahl_reservierungen,
+    a.name AS agency_name
+FROM
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.reservations` r
+JOIN
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.visors` v ON r.visor_id = v._id
+JOIN
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON v.agency_id = a._id
+WHERE
+    a._id = @agency_id
+    AND r.created_at BETWEEN @start_date AND @end_date
+GROUP BY
+    a.name
+"""
+
 # 2. Quote: Anzahl Reservierungen - Anzahl erfüllte Reservierungen
 # Erläuterung: "Zeigt wie viel % Ihrer Reservierungen die Agentur schlussendlich auch mit einem BK Vorschlag erfüllt hat"
 GET_FULFILLED_RESERVATIONS = """
@@ -183,8 +201,340 @@ GROUP BY
     a.name
 """
 
+# Neue Query: Anzahl akzeptierter/angenommener Pflegeeinsätze
+# Erläuterung: Zählt Einsätze, die irgendwann den Status "Angenommen" erreicht haben
+GET_ACCEPTED_CARE_STAYS = """
+SELECT 
+    COUNT(DISTINCT cs._id) AS accepted_care_stays_count,
+    a.name AS agency_name
+FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+WHERE 
+    a._id = @agency_id
+    AND cs.created_at BETWEEN @start_date AND @end_date
+    AND EXISTS (
+        SELECT 1
+        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+        WHERE 
+            JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Angenommen'
+    )
+GROUP BY
+    a.name
+"""
+
+# Neue Query: Anzahl akzeptierter Ersteinsätze (Nur is_swap = false)
+GET_ACCEPTED_FIRST_CARE_STAYS = """
+SELECT 
+    COUNT(DISTINCT cs._id) AS accepted_first_care_stays_count,
+    a.name AS agency_name
+FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+WHERE 
+    a._id = @agency_id
+    AND cs.created_at BETWEEN @start_date AND @end_date
+    AND cs.is_swap = "false"
+    -- Stellt sicher, dass auch ein Visor vorhanden ist
+    AND cs.visor_id IS NOT NULL
+    -- Prüft explizit, dass eine Statusänderung zu 'Angenommen' stattgefunden hat
+    AND EXISTS (
+        SELECT 1
+        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+        WHERE 
+            JSON_EXTRACT_SCALAR(track, '$.differences.stage[0]') IS NOT NULL
+            AND JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Angenommen'
+    )
+GROUP BY
+    a.name
+"""
+
+# Neue Query: Anzahl akzeptierter Folgeeinsätze (Nur is_swap = true)
+GET_ACCEPTED_FOLLOW_CARE_STAYS = """
+SELECT 
+    COUNT(DISTINCT cs._id) AS accepted_follow_care_stays_count,
+    a.name AS agency_name
+FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+WHERE 
+    a._id = @agency_id
+    AND cs.created_at BETWEEN @start_date AND @end_date
+    AND cs.is_swap = "true"
+    AND EXISTS (
+        SELECT 1
+        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+        WHERE 
+            JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Angenommen'
+    )
+GROUP BY
+    a.name
+"""
+
+# Neue Query: Anzahl bestätigter Pflegeeinsätze
+# Erläuterung: Zählt Einsätze, die irgendwann den Status "Bestätigt" erreicht haben.
+GET_CONFIRMED_CARE_STAYS = """
+SELECT 
+    COUNT(DISTINCT cs._id) AS confirmed_care_stays_count,
+    a.name AS agency_name
+FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+WHERE 
+    a._id = @agency_id
+    AND cs.created_at BETWEEN @start_date AND @end_date
+    AND EXISTS (
+        SELECT 1
+        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+        WHERE 
+            JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+    )
+GROUP BY
+    a.name
+"""
+
+# Neue Query: Anzahl bestätigter Ersteinsätze (Nur is_swap = false)
+GET_CONFIRMED_FIRST_CARE_STAYS = """
+SELECT 
+    COUNT(DISTINCT cs._id) AS confirmed_first_care_stays_count,
+    a.name AS agency_name
+FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+WHERE 
+    a._id = @agency_id
+    AND cs.created_at BETWEEN @start_date AND @end_date
+    AND cs.is_swap = "false"
+    AND EXISTS (
+        SELECT 1
+        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+        WHERE 
+            JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+    )
+GROUP BY
+    a.name
+"""
+
+# Neue Query: Anzahl bestätigter Folgeeinsätze (Nur is_swap = true)
+GET_CONFIRMED_FOLLOW_CARE_STAYS = """
+SELECT 
+    COUNT(DISTINCT cs._id) AS confirmed_follow_care_stays_count,
+    a.name AS agency_name
+FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+WHERE 
+    a._id = @agency_id
+    AND cs.created_at BETWEEN @start_date AND @end_date
+    AND cs.is_swap = "true"
+    AND EXISTS (
+        SELECT 1
+        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+        WHERE 
+            JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+    )
+GROUP BY
+    a.name
+"""
+
+# Neue Query: Zählung tatsächlich angereister Ersteinsätze
+# Zählt Care Stays, die:
+# 1. ein Anreisedatum haben
+# 2. den Status "Bestätigt" erreicht haben
+# 3. nicht vor dem Anreisedatum abgebrochen wurden
+GET_SIMPLE_ARRIVED_FIRST_CARE_STAYS = """
+SELECT 
+    COUNT(*) AS simple_arrived_first_care_stays_count,
+    a.name AS agency_name
+FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+WHERE 
+    a._id = @agency_id
+    AND cs.created_at BETWEEN @start_date AND @end_date
+    AND cs.arrival IS NOT NULL
+    AND cs.arrival != ''
+    -- Nur erste Einsätze, keine Folgeeinsätze
+    AND cs.is_swap = "false"
+    -- Muss den Status "Bestätigt" erreicht haben
+    AND EXISTS (
+        SELECT 1
+        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+        WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+    )
+    -- Wurde nicht vor Anreise abgebrochen
+    AND NOT (
+        cs.stage = 'Abgebrochen' AND 
+        EXISTS (
+            -- Sucht nach einem Tracking-Event "Abgebrochen" VOR dem Anreisedatum
+            SELECT 1
+            FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+            WHERE 
+                JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Abgebrochen'
+                AND TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at')) < TIMESTAMP(cs.arrival)
+        )
+    )
+GROUP BY
+    a.name
+"""
+
+# Neue Query: Zählung tatsächlich angereister Folgeeinsätze
+GET_SIMPLE_ARRIVED_FOLLOW_CARE_STAYS = """
+SELECT 
+    COUNT(*) AS simple_arrived_follow_care_stays_count,
+    a.name AS agency_name
+FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+WHERE 
+    a._id = @agency_id
+    AND cs.created_at BETWEEN @start_date AND @end_date
+    AND cs.arrival IS NOT NULL
+    AND cs.arrival != ''
+    -- Nur Folgeeinsätze
+    AND cs.is_swap = "true"
+    -- Muss den Status "Bestätigt" erreicht haben
+    AND EXISTS (
+        SELECT 1
+        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+        WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+    )
+    -- Wurde nicht vor Anreise abgebrochen
+    AND NOT (
+        cs.stage = 'Abgebrochen' AND 
+        EXISTS (
+            -- Sucht nach einem Tracking-Event "Abgebrochen" VOR dem Anreisedatum
+            SELECT 1
+            FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+            WHERE 
+                JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Abgebrochen'
+                AND TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at')) < TIMESTAMP(cs.arrival)
+        )
+    )
+GROUP BY
+    a.name
+"""
+
+# Neue Query: Zählung aller tatsächlich angereisten Einsätze
+GET_SIMPLE_ARRIVED_ALL_CARE_STAYS = """
+SELECT 
+    COUNT(*) AS simple_arrived_all_care_stays_count,
+    a.name AS agency_name
+FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+WHERE 
+    a._id = @agency_id
+    AND cs.created_at BETWEEN @start_date AND @end_date
+    AND cs.arrival IS NOT NULL
+    AND cs.arrival != ''
+    -- Muss den Status "Bestätigt" erreicht haben
+    AND EXISTS (
+        SELECT 1
+        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+        WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+    )
+    -- Wurde nicht vor Anreise abgebrochen
+    AND NOT (
+        cs.stage = 'Abgebrochen' AND 
+        EXISTS (
+            -- Sucht nach einem Tracking-Event "Abgebrochen" VOR dem Anreisedatum
+            SELECT 1
+            FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+            WHERE 
+                JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Abgebrochen'
+                AND TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at')) < TIMESTAMP(cs.arrival)
+        )
+    )
+GROUP BY
+    a.name
+"""
+
+# Neue Query: Anzahl erfüllter Reservierungen mit Ersteinsätzen
+# Wichtig: Wir filtern sowohl r.created_at ALS AUCH cs.created_at mit demselben Zeitraum!
+GET_FULFILLED_RESERVATIONS_FIRST_STAYS = """
+WITH valid_care_stays AS (
+    -- Nur Care Stays im ausgewählten Zeitraum
+    SELECT
+        cs._id,
+        cs.visor_id
+    FROM 
+        `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+    WHERE 
+        cs.created_at BETWEEN @start_date AND @end_date
+        AND cs.is_swap = "false"
+)
+SELECT 
+    COUNT(DISTINCT vcs._id) AS fulfilled_first_reservations_count,
+    a.name AS agency_name
+FROM
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.reservations` r
+JOIN
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.visors` v ON r.visor_id = v._id
+JOIN
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON v.agency_id = a._id
+-- JOIN mit der validen Care Stays Tabelle
+JOIN
+    valid_care_stays vcs ON v._id = vcs.visor_id
+WHERE
+    r.fulfilled = "true"
+    AND a._id = @agency_id
+    -- Zusätzlicher Zeitraumfilter auch für Reservierungen
+    AND r.created_at BETWEEN @start_date AND @end_date
+GROUP BY 
+    a.name
+"""
+
+# Neue Query: Anzahl erfüllter Reservierungen mit Folgeeinsätzen (is_swap = true)
+GET_FULFILLED_RESERVATIONS_FOLLOW_STAYS = """
+SELECT
+    COUNT(*) AS fulfilled_follow_reservations_count,
+    a.name AS agency_name
+FROM
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.reservations` r
+JOIN
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.visors` v ON r.visor_id = v._id
+JOIN
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs ON v._id = cs.visor_id
+JOIN
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON v.agency_id = a._id
+WHERE
+    r.fulfilled = "true"
+    AND a._id = @agency_id
+    AND r.created_at BETWEEN @start_date AND @end_date
+    AND cs.is_swap = "true"
+GROUP BY
+    a.name
+"""
+
 # 6. Quote: Anzahl gemachter Personalvorschläge - Anzahl VOR Einsatz abgebrochener Pflegeeinsätze
-# Erläuterung: "Zeigt, wie viel % der vorgeschlagenen Pflegekräfte von der Agentur wieder abgebrochen wurden (vor Anreise)"
 GET_PERSONNEL_PROPOSALS = """
 SELECT
     COUNT(*) AS proposal_count,
@@ -280,6 +630,7 @@ WHERE is_swap != 'false'
 
 # 7. Quote: Pflegeeinsatz angetreten - Pflegeinsatz vollständig beendet
 # Erläuterung: "Zeigt, wie viel % der zum Kunden angereisten Pflegekräfte den Einsatz wie geplant bis zum Schluss durchgezogen haben"
+# Hinweis: Verlängerungen oder leichte Verkürzungen (bis zu 2 Wochen) gelten als erfolgreich durchgeführt
 GET_COMPLETED_CARE_STAYS = """
 WITH parsed AS (
   SELECT
@@ -304,17 +655,46 @@ WITH parsed AS (
     AND TIMESTAMP(cs.departure) < CURRENT_TIMESTAMP()
     AND a._id = @agency_id
     AND cs.created_at BETWEEN @start_date AND @end_date
+),
+departure_changes AS (
+  -- Für jeden Care Stay die Departure-Änderungen extrahieren und analysieren
+  SELECT
+    p._id,
+    -- Ursprüngliches departure-Datum aus den tracks ermitteln (erste Version)
+    ARRAY_AGG(
+      STRUCT(
+        JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[0]') AS original_departure,
+        JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[1]') AS new_departure,
+        JSON_EXTRACT_SCALAR(track_item, '$.created_at') AS change_timestamp
+      )
+      ORDER BY JSON_EXTRACT_SCALAR(track_item, '$.created_at') ASC
+    )[OFFSET(0)] AS first_change
+  FROM
+    parsed p,
+    UNNEST(p.track_array) AS track_item
+  WHERE
+    JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[0]') IS NOT NULL
+  GROUP BY
+    p._id
 )
 SELECT
   COUNT(*) AS completed_full_term,
   agency_name
-FROM parsed
+FROM parsed p
+LEFT JOIN departure_changes dc ON p._id = dc._id
 WHERE
-  NOT EXISTS (
-    SELECT 1
-    FROM UNNEST(track_array) AS track_item
-    WHERE JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[0]') IS NOT NULL
-  )
+  -- Entweder keine Änderung am Departure-Datum
+  dc._id IS NULL
+  OR
+  -- Oder Verlängerung (neues Datum später als ursprüngliches)
+  TIMESTAMP(dc.first_change.new_departure) > TIMESTAMP(dc.first_change.original_departure)
+  OR
+  -- Oder nur leichte Verkürzung (maximal 14 Tage früher)
+  TIMESTAMP_DIFF(
+    TIMESTAMP(dc.first_change.original_departure),
+    TIMESTAMP(dc.first_change.new_departure),
+    DAY
+  ) <= 14
 GROUP BY
   agency_name
 """
@@ -386,4 +766,64 @@ SELECT
     SAFE_DIVIDE(AVG(bpa.total_cancelled), AVG(ppa.proposal_count)) AS avg_cancellation_ratio
 FROM buckets_per_agency bpa
 JOIN proposals_per_agency ppa ON bpa.agency_id = ppa.agency_id
+"""
+
+# Neue Query: Anzahl aller Personalvorschläge (Care Stays)
+GET_PV_COUNT = """
+SELECT 
+    COUNT(DISTINCT cs._id) AS pv_count,
+    a.name AS agency_name
+FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+WHERE 
+    a._id = @agency_id
+    AND cs.created_at BETWEEN @start_date AND @end_date
+GROUP BY
+    a.name
+"""
+
+# Neue Query: Anzahl der Personalvorschläge für Ersteinsätze
+GET_PV_FIRST_COUNT = """
+SELECT 
+    COUNT(DISTINCT cs._id) AS pv_first_count,
+    a.name AS agency_name
+FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+WHERE 
+    a._id = @agency_id
+    AND cs.created_at BETWEEN @start_date AND @end_date
+    AND cs.is_swap = "false"
+    -- Stellt sicher, dass auch ein Visor vorhanden ist
+    AND cs.visor_id IS NOT NULL
+GROUP BY
+    a.name
+"""
+
+# Neue Query: Anzahl der Personalvorschläge für Folgeeinsätze
+GET_PV_FOLLOW_COUNT = """
+SELECT 
+    COUNT(DISTINCT cs._id) AS pv_follow_count,
+    a.name AS agency_name
+FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+WHERE 
+    a._id = @agency_id
+    AND cs.created_at BETWEEN @start_date AND @end_date
+    AND cs.is_swap = "true"
+    -- Stellt sicher, dass auch ein Visor vorhanden ist
+    AND cs.visor_id IS NOT NULL
+GROUP BY
+    a.name
 """

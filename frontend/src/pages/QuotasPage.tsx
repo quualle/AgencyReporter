@@ -6,7 +6,7 @@ import ErrorMessage from '../components/common/ErrorMessage';
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, Cell, PieChart, Pie, LineChart, Line, ComposedChart, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import { FunnelChart, Funnel, LabelList } from 'recharts';
 import ExportButton from '../components/common/ExportButton';
-import { format, subYears, subQuarters } from 'date-fns';
+import { format, subYears, subQuarters, subMonths } from 'date-fns';
 import { calculateDateRange, getCurrentQuarter, getQuarterStart, getQuarterEnd } from '../components/common/TimeFilter';
 
 // Define a type for the scatter data points
@@ -98,6 +98,9 @@ const QuotasPage: React.FC = () => {
   const [historicalComparisonData, setHistoricalComparisonData] = useState<any>(null);
   const [allAvailableAgencies, setAllAvailableAgencies] = useState<Agency[]>([]);
   
+  // State für Einsatztyp (Ersteinsätze oder Wechseleinsätze)
+  const [staysType, setStaysType] = useState<'first' | 'followup'>('first');
+  
   // Neuer State für historische Werte (Wert B)
   const [historicalQuotasData, setHistoricalQuotasData] = useState<any | null>(null);
   
@@ -161,9 +164,120 @@ const QuotasPage: React.FC = () => {
     // Default-Fallback
     return 'last_year';
   };
+  
+  // Funktion, um den aktuellen Datumsbereich basierend auf dem gewählten Zeitraum zu erhalten
+  const getCurrentDateRange = (): { startDate: string, endDate: string } => {
+    // Verwende die vorhandene calculateDateRange Funktion aus TimeFilter
+    return calculateDateRange(timePeriod);
+  };
+  
+  // Funktion, um den historischen Datumsbereich basierend auf dem Vergleichszeitraum zu berechnen
+  const getHistoricalDateRange = (): { startDate: string, endDate: string } => {
+    const now = new Date();
+    let startDate: Date;
+    let endDate: Date;
+    
+    // Für Vorjahr (gleiches Quartal) benötigen wir speziellere Berechnungen
+    if (historicalPeriod === 'last_year') {
+      // Basierend auf dem aktuellen Zeitraum, berechne den gleichen Zeitraum im Vorjahr
+      switch(timePeriod) {
+        case 'current_quarter': {
+          // Aktuelles Quartal, aber ein Jahr zurück
+          const lastYear = subYears(now, 1);
+          startDate = getQuarterStart(lastYear);
+          endDate = getQuarterEnd(lastYear);
+          break;
+        }
+        case 'last_quarter': {
+          // Letztes Quartal, aber ein Jahr zurück
+          const lastQuarter = subQuarters(now, 1);
+          const lastYearLastQuarter = subYears(lastQuarter, 1);
+          startDate = getQuarterStart(lastYearLastQuarter);
+          endDate = getQuarterEnd(lastYearLastQuarter);
+          break;
+        }
+        case 'current_year': {
+          // Aktuelles Jahr, aber ein Jahr zurück = voriges Jahr
+          const lastYear = subYears(now, 1);
+          startDate = new Date(lastYear.getFullYear(), 0, 1); // 1. Januar des Vorjahres
+          endDate = new Date(lastYear.getFullYear(), 11, 31); // 31. Dezember des Vorjahres
+          break;
+        }
+        case 'last_year': {
+          // Letztes Jahr, aber ein Jahr zurück = vor zwei Jahren
+          const twoYearsAgo = subYears(now, 2);
+          startDate = new Date(twoYearsAgo.getFullYear(), 0, 1); // 1. Januar vor zwei Jahren
+          endDate = new Date(twoYearsAgo.getFullYear(), 11, 31); // 31. Dezember vor zwei Jahren
+          break;
+        }
+        case 'current_month': {
+          // Aktueller Monat, aber ein Jahr zurück
+          const lastYear = subYears(now, 1);
+          startDate = new Date(lastYear.getFullYear(), now.getMonth(), 1); // Erster Tag des gleichen Monats im Vorjahr
+          // Letzter Tag des gleichen Monats im Vorjahr
+          const lastDayOfMonth = new Date(lastYear.getFullYear(), now.getMonth() + 1, 0).getDate();
+          endDate = new Date(lastYear.getFullYear(), now.getMonth(), lastDayOfMonth);
+          break;
+        }
+        case 'last_month': {
+          // Letzter Monat, aber ein Jahr zurück
+          const lastMonth = subMonths(now, 1);
+          const lastYearLastMonth = subYears(lastMonth, 1);
+          startDate = new Date(lastYearLastMonth.getFullYear(), lastYearLastMonth.getMonth(), 1); // Erster Tag
+          // Letzter Tag des Monats
+          const lastDayOfMonth = new Date(lastYearLastMonth.getFullYear(), lastYearLastMonth.getMonth() + 1, 0).getDate();
+          endDate = new Date(lastYearLastMonth.getFullYear(), lastYearLastMonth.getMonth(), lastDayOfMonth);
+          break;
+        }
+        default: {
+          // Standardmäßig ein Jahr zurück
+          startDate = subYears(now, 1);
+          endDate = subYears(now, 1);
+          break;
+        }
+      }
+    } else if (historicalPeriod === 'last_quarter') {
+      // Für Vorquartal
+      switch(timePeriod) {
+        case 'current_quarter': {
+          // Ein Quartal zurück vom aktuellen Quartal
+          const lastQuarter = subQuarters(now, 1);
+          startDate = getQuarterStart(lastQuarter);
+          endDate = getQuarterEnd(lastQuarter);
+          break;
+        }
+        case 'last_quarter': {
+          // Zwei Quartale zurück
+          const twoQuartersAgo = subQuarters(now, 2);
+          startDate = getQuarterStart(twoQuartersAgo);
+          endDate = getQuarterEnd(twoQuartersAgo);
+          break;
+        }
+        default: {
+          // Standardmäßig ein Quartal zurück
+          const lastQuarter = subQuarters(now, 1);
+          startDate = getQuarterStart(lastQuarter);
+          endDate = getQuarterEnd(lastQuarter);
+          break;
+        }
+      }
+    } else {
+      // Für "last_6months" und andere Fälle
+      const sixMonthsAgo = subMonths(now, 6);
+      startDate = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1); // Erster Tag des Monats vor 6 Monaten
+      endDate = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth() + 6, 0); // Letzter Tag des Monats vor 1 Monat
+    }
+    
+    return {
+      startDate: format(startDate, 'yyyy-MM-dd'),
+      endDate: format(endDate, 'yyyy-MM-dd'),
+    };
+  };
 
   // Effekt zum Laden der historischen Daten (Wert B) für den Vergleich mit sich selbst
   useEffect(() => {
+    console.log(`useEffect for historical data triggered - comparisonType: ${comparisonType}, historicalPeriod: ${historicalPeriod}`);
+    
     const fetchHistoricalQuotasData = async () => {
       if (!selectedAgency || comparisonType !== 'historical') return;
       
@@ -300,26 +414,62 @@ const QuotasPage: React.FC = () => {
         setEarlyEndReasons(earlyEndReasonsData);
 
         // Historische Daten für Trends laden
+        const mockHistoricalData = {
+          periods: ['Q1', 'Q2', 'Q3', 'Q4'],
+          metrics: {
+            reservation_rate: [0.55, 0.58, 0.62, 0.65],
+            fulfillment_rate: [0.72, 0.70, 0.75, 0.78],
+            cancellation_rate: [0.15, 0.18, 0.12, 0.10],
+            start_rate: [0.85, 0.82, 0.88, 0.90],
+            completion_rate: [0.78, 0.75, 0.82, 0.85],
+            early_end_rate: [0.22, 0.25, 0.18, 0.15]
+          }
+        };
+        
+        // Setze zunächst die Mock-Daten, für den Fall dass die API-Abfrage fehlschlägt
+        setHistoricalData(mockHistoricalData);
+        
+        // Starte separate API-Abfragen für verschiedene historische Zeiträume
         try {
-          const historicalQuotasData = await apiService.getAgencyHistoricalData(
-            selectedAgency.agency_id, 
-            ['last_quarter', 'last_year', 'last_6months']
+          // Wir holen die Daten für jede historische Periode, um Trends anzuzeigen
+          const historicalPeriods = ['last_quarter', 'last_year', 'last_6months'];
+          const historicalPromises = historicalPeriods.map(period => 
+            apiService.getAgencyQuotas(selectedAgency.agency_id, period)
           );
           
-          // Mock-Daten ersetzen, wenn echte Daten verfügbar sind
-          setHistoricalData(historicalQuotasData || {
-            periods: ['Q1', 'Q2', 'Q3', 'Q4'],
-            metrics: {
-              reservation_rate: [0.55, 0.58, 0.62, 0.65],
-              fulfillment_rate: [0.72, 0.70, 0.75, 0.78],
-              cancellation_rate: [0.15, 0.18, 0.12, 0.10],
-              start_rate: [0.85, 0.82, 0.88, 0.90],
-              completion_rate: [0.78, 0.75, 0.82, 0.85],
-              early_end_rate: [0.22, 0.25, 0.18, 0.15]
-            }
-          });
+          Promise.all(historicalPromises)
+            .then(results => {
+              // Formatiere die historischen Daten für die Trendanzeige
+              type PeriodKey = 'last_quarter' | 'last_year' | 'last_6months' | 'current_quarter';
+              
+              const periodsMapping: Record<PeriodKey, string> = {
+                'last_quarter': 'Letztes Quartal',
+                'last_year': 'Letztes Jahr',
+                'last_6months': 'Letzte 6 Monate',
+                'current_quarter': 'Aktuelles Quartal'
+              };
+              
+              const periods = historicalPeriods.map(p => {
+                return (p in periodsMapping) ? periodsMapping[p as PeriodKey] : p;
+              });
+              
+              const metrics = {
+                reservation_rate: results.map(r => r.selected_agency?.reservation_rate || 0),
+                fulfillment_rate: results.map(r => r.selected_agency?.fulfillment_rate || 0),
+                cancellation_rate: results.map(r => r.selected_agency?.cancellation_rate || 0),
+                start_rate: results.map(r => r.selected_agency?.start_rate || 0),
+                completion_rate: results.map(r => r.selected_agency?.completion_rate || 0),
+                early_end_rate: results.map(r => r.selected_agency?.early_end_rate || 0)
+              };
+              
+              setHistoricalData({ periods, metrics });
+            })
+            .catch(error => {
+              console.error('Fehler beim Laden der historischen Daten für Trends:', error);
+              // Bei Fehler bleiben die Mock-Daten bestehen
+            });
         } catch (err) {
-          console.error('Error fetching historical data:', err);
+          console.error('Error setting up historical data requests:', err);
           // Weiter mit Mock-Daten als Fallback
         }
 
@@ -429,7 +579,16 @@ const QuotasPage: React.FC = () => {
   
   // Handler für Auswahl der historischen Periode
   const handleHistoricalPeriodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setHistoricalPeriod(e.target.value as HistoricalPeriod);
+    const newPeriod = e.target.value as HistoricalPeriod;
+    console.log(`Changing historical period from ${historicalPeriod} to ${newPeriod}`);
+    setHistoricalPeriod(newPeriod);
+  };
+  
+  // Handler für Änderungen am Einsatztyp
+  const handleStaysTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newType = e.target.value as 'first' | 'followup';
+    console.log(`Changing stays type from ${staysType} to ${newType}`);
+    setStaysType(newType);
   };
   
   if (isLoading) {
@@ -504,7 +663,7 @@ const QuotasPage: React.FC = () => {
           case 'last_quarter':
             return 'Vorquartal';
           case 'last_year':
-            return 'Vorjahr';
+            return 'Vorjahr (gleiches Quartal)';
           case 'last_6months':
             return 'Letzte 6 Monate';
           default:
@@ -514,6 +673,48 @@ const QuotasPage: React.FC = () => {
       default:
         return 'Durchschnitt';
     }
+  };
+  
+  // Komponente zur Anzeige der Datumsvergleiche für die Pipeline-Übersicht
+  const DateRangeDisplay: React.FC = () => {
+    // Aktuelle Datumsperiode (Wert A)
+    const currentDateRange = getCurrentDateRange();
+    const currentStartDate = format(new Date(currentDateRange.startDate), 'dd.MM.yyyy');
+    const currentEndDate = format(new Date(currentDateRange.endDate), 'dd.MM.yyyy');
+    
+    // Wenn wir einen historischen Vergleich machen, zeigen wir beide Zeiträume
+    if (comparisonType === 'historical') {
+      const histDateRange = getHistoricalDateRange();
+      const histStartDate = format(new Date(histDateRange.startDate), 'dd.MM.yyyy');
+      const histEndDate = format(new Date(histDateRange.endDate), 'dd.MM.yyyy');
+      
+      return (
+        <div className="date-range-info text-sm text-gray-600 dark:text-gray-300 mb-2">
+          <div className="flex flex-col sm:flex-row">
+            <div className="mr-4">
+              <span className="font-semibold">Aktuell:</span> {currentStartDate} - {currentEndDate}
+            </div>
+            <div>
+              <span className="font-semibold">{getComparisonLabel()}:</span> {histStartDate} - {histEndDate}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Für andere Vergleichstypen zeigen wir nur den aktuellen Zeitraum
+    return (
+      <div className="date-range-info text-sm text-gray-600 dark:text-gray-300 mb-2">
+        <div className="flex">
+          <div className="mr-4">
+            <span className="font-semibold">Zeitraum:</span> {currentStartDate} - {currentEndDate}
+          </div>
+          <div>
+            <span className="font-semibold">Vergleich mit:</span> {getComparisonLabel()}
+          </div>
+        </div>
+      </div>
+    );
   };
   
   // Prepare data for scatter plot
@@ -1295,86 +1496,11 @@ const QuotasPage: React.FC = () => {
   };
   
   // Hilfsfunktion zum Formatieren eines Datums im deutschen Format (TT.MM.JJJJ)
+  // Format date in German format
   const formatGermanDate = (dateStr: string): string => {
     const parts = dateStr.split('-');
     if (parts.length !== 3) return dateStr;
     return `${parts[2]}.${parts[1]}.${parts[0]}`;
-  };
-  
-  // Berechnet den Datumsbereich für den aktuellen Zeitraum
-  const getCurrentDateRange = (): { startDate: string, endDate: string } => {
-    // Wir nutzen die Funktion aus dem TimeFilter
-    return calculateDateRange(timePeriod);
-  };
-  
-  // Berechnet den Datumsbereich für den historischen Vergleichszeitraum
-  const getHistoricalDateRange = (): { startDate: string, endDate: string } => {
-    const historicalTimePeriod = getHistoricalTimePeriod(timePeriod, historicalPeriod);
-    const now = new Date();
-    let startDate: Date;
-    let endDate: Date;
-
-    // Berechne die aktuellen Quartale und Jahre
-    const currentQuarter = getCurrentQuarter(now);
-    const currentYear = now.getFullYear();
-
-    switch (historicalTimePeriod) {
-      case 'same_quarter_last_year':
-        // Wir wollen genau das gleiche Quartal, aber ein Jahr früher
-        if (timePeriod === 'last_quarter') {
-          // Wenn "letztes Quartal" ausgewählt ist, nehmen wir das gleiche Quartal im Vorjahr
-          const lastQuarter = subQuarters(now, 1);
-          const lastQuarterLastYear = subYears(lastQuarter, 1);
-          startDate = getQuarterStart(lastQuarterLastYear);
-          endDate = getQuarterEnd(lastQuarterLastYear);
-        } else if (timePeriod === 'current_quarter') {
-          // Wenn "aktuelles Quartal" ausgewählt ist, nehmen wir das gleiche Quartal im Vorjahr
-          const currentQuarterLastYear = subYears(now, 1);
-          startDate = getQuarterStart(currentQuarterLastYear);
-          endDate = getQuarterEnd(currentQuarterLastYear);
-        } else {
-          // Standardfall
-          const quarterLastYear = new Date(now.getFullYear() - 1, (currentQuarter - 1) * 3, 1);
-          startDate = getQuarterStart(quarterLastYear);
-          endDate = getQuarterEnd(quarterLastYear);
-        }
-        break;
-      case 'two_years_ago':
-        // Zwei Jahre zurück
-        startDate = new Date(now.getFullYear() - 2, 0, 1);
-        endDate = new Date(now.getFullYear() - 2, 11, 31);
-        break;
-      case 'last_quarter':
-        const lastQuarter = subQuarters(now, 1);
-        startDate = getQuarterStart(lastQuarter);
-        endDate = getQuarterEnd(lastQuarter);
-        break;
-      case 'two_quarters_ago':
-        const twoQuartersAgo = subQuarters(now, 2);
-        startDate = getQuarterStart(twoQuartersAgo);
-        endDate = getQuarterEnd(twoQuartersAgo);
-        break;
-      case 'last_year':
-        // Ein Jahr zurück (volles Jahr)
-        startDate = new Date(now.getFullYear() - 1, 0, 1);
-        endDate = new Date(now.getFullYear() - 1, 11, 31);
-        break;
-      case 'last_6months':
-        // Letzte 6 Monate
-        startDate = new Date(now.getFullYear(), now.getMonth() - 6, 1);
-        endDate = new Date(now.getFullYear(), now.getMonth() - 1, 
-                           new Date(now.getFullYear(), now.getMonth(), 0).getDate());
-        break;
-      default:
-        // Fallback auf letztes Jahr
-        startDate = new Date(now.getFullYear() - 1, 0, 1);
-        endDate = new Date(now.getFullYear() - 1, 11, 31);
-    }
-
-    return {
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0]
-    };
   };
 
   return (
@@ -1394,10 +1520,11 @@ const QuotasPage: React.FC = () => {
               <div className="relative inline-block">
                 <select 
                   className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-3 py-2 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  value={staysType}
+                  onChange={handleStaysTypeChange}
                 >
                   <option value="first">Nur Ersteinsätze</option>
                   <option value="followup">Nur Wechseleinsätze</option>
-                  <option value="all">Gesamt</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
                   <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -1408,102 +1535,12 @@ const QuotasPage: React.FC = () => {
               <span className="ml-2 text-xs font-normal px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 rounded">In Entwicklung</span>
             </div>
           </div>
-          <div className="relative inline-block">
-            <div className="flex flex-col">
-              <div className="flex items-center">
-                <span className="mr-2 text-sm font-medium text-gray-700 dark:text-gray-300">Vergleichsansicht:</span>
-                <select 
-                  className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={comparisonType}
-                  onChange={handleComparisonTypeChange}
-                >
-                  <option value="average">Mit Durchschnitt</option>
-                  <option value="historical">Mit sich selbst</option>
-                  <option value="agency">Mit anderer Agentur</option>
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
-                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </div>
-              </div>
-              
-              {comparisonType === 'historical' && (
-                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  <div className="flex flex-col">
-                    <div className="flex">
-                      <span className="font-semibold mr-1">Aktuell:</span>
-                      <span>
-                        {(() => {
-                          const { startDate, endDate } = getCurrentDateRange();
-                          return `${formatGermanDate(startDate)} - ${formatGermanDate(endDate)}`;
-                        })()}
-                      </span>
-                    </div>
-                    <div className="flex">
-                      <span className="font-semibold mr-1">{getComparisonLabel()}:</span>
-                      <span>
-                        {(() => {
-                          const { startDate, endDate } = getHistoricalDateRange();
-                          return `${formatGermanDate(startDate)} - ${formatGermanDate(endDate)}`;
-                        })()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
           
-          {comparisonType === 'agency' && (
-            <div className="relative inline-block ml-2">
-              <select 
-                className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={selectedComparisonAgency}
-                onChange={handleComparisonAgencyChange}
-              >
-                <option value="" disabled>Agentur auswählen</option>
-                {allAvailableAgencies
-                  .filter(agency => agency.agency_id !== selectedAgency.agency_id)
-                  .map(agency => (
-                    <option key={agency.agency_id} value={agency.agency_id}>
-                      {agency.agency_name}
-                    </option>
-                  ))
-                }
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
-                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </div>
-            </div>
-          )}
-          
-          {comparisonType === 'historical' && (
-            <div className="relative inline-block ml-2">
-              <select 
-                className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={historicalPeriod}
-                onChange={handleHistoricalPeriodChange}
-              >
-                <option value="last_quarter">Vorquartal</option>
-                <option value="last_year">Vorjahr (gleiches Quartal)</option>
-                <option value="last_6months">Letzte 6 Monate</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
-                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </div>
-            </div>
-          )}
-          
-        <ExportButton 
-          targetElementId="quotas-content" 
-          filename="quoten-analyse" 
-          pageTitle="Quoten-Analyse" 
-        />
+          <ExportButton 
+            targetElementId="quotas-content" 
+            filename="quoten-analyse" 
+            pageTitle="Quoten-Analyse" 
+          />
         </div>
       </div>
       
@@ -1513,6 +1550,9 @@ const QuotasPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3">
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 sm:mb-0"><span className="font-medium">Hinweis:</span> Diese Analyse bezieht sich auf Ersteinsätze und nicht auf Wechseleinsätze.</p>
           </div>
+          
+          {/* Anzeige der Datumsbereiche für den Vergleich */}
+          <DateRangeDisplay />
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
@@ -1611,6 +1651,101 @@ const QuotasPage: React.FC = () => {
                   </table>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="mb-4 bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
+          <div className="flex flex-wrap items-center">
+            <h3 className="text-md font-medium text-gray-800 dark:text-white mr-3 mb-2 sm:mb-0">
+              KPI-Vergleich mit:
+            </h3>
+            <div className="flex items-center flex-wrap gap-3">
+              <div className="relative inline-block">
+                <select 
+                  className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-3 py-1.5 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  value={comparisonType}
+                  onChange={handleComparisonTypeChange}
+                >
+                  <option value="average">Mit Durchschnitt</option>
+                  <option value="historical">Mit sich selbst</option>
+                  <option value="agency">Mit anderer Agentur</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+              
+              {comparisonType === 'agency' && (
+                <div className="relative inline-block">
+                  <select 
+                    className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-3 py-1.5 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    value={selectedComparisonAgency}
+                    onChange={handleComparisonAgencyChange}
+                  >
+                    <option value="" disabled>Agentur auswählen</option>
+                    {allAvailableAgencies
+                      .filter(agency => agency.agency_id !== selectedAgency.agency_id)
+                      .map(agency => (
+                        <option key={agency.agency_id} value={agency.agency_id}>
+                          {agency.agency_name}
+                        </option>
+                      ))
+                    }
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+              )}
+              
+              {comparisonType === 'historical' && (
+                <div className="relative inline-block">
+                  <select 
+                    className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-3 py-1.5 pr-8 rounded text-sm font-medium appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    value={historicalPeriod}
+                    onChange={handleHistoricalPeriodChange}
+                  >
+                    <option value="last_quarter">Vorquartal</option>
+                    <option value="last_year">Vorjahr (gleiches Quartal)</option>
+                    <option value="last_6months">Letzte 6 Monate</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+              )}
+              
+              {comparisonType === 'historical' && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                  <div className="flex flex-col sm:flex-row sm:gap-4">
+                    <div className="flex">
+                      <span className="font-semibold mr-1">Aktuell:</span>
+                      <span>
+                        {(() => {
+                          const { startDate, endDate } = getCurrentDateRange();
+                          return `${formatGermanDate(startDate)} - ${formatGermanDate(endDate)}`;
+                        })()}
+                      </span>
+                    </div>
+                    <div className="flex">
+                      <span className="font-semibold mr-1">{getComparisonLabel()}:</span>
+                      <span>
+                        {(() => {
+                          const { startDate, endDate } = getHistoricalDateRange();
+                          return `${formatGermanDate(startDate)} - ${formatGermanDate(endDate)}`;
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

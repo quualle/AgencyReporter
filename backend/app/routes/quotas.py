@@ -23,7 +23,9 @@ async def get_posting_metrics(
 @router.get("/{agency_id}/reservations")
 async def get_agency_reservation_metrics(
     agency_id: str,
-    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$"),
+    start_date: str = Query(None, description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(None, description="End date in YYYY-MM-DD format")
 ):
     """
     Get reservation metrics for a specific agency
@@ -32,19 +34,41 @@ async def get_agency_reservation_metrics(
         query_manager = QueryManager()
         reservation_metrics = query_manager.get_agency_reservation_metrics(
             agency_id=agency_id,
+            start_date=start_date,
+            end_date=end_date,
             time_period=time_period
         )
         return reservation_metrics
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch reservation metrics: {str(e)}")
 
-@router.get("/{agency_id}/fulfillment")
+@router.get("/{agency_id}/fulfillment", deprecated=True)
 async def get_fulfillment_rate(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
     """
+    [DEPRECATED] Use /{agency_id}/reservation-fulfillment instead.
     Get fulfillment rate for a specific agency
+    (Quote 2: Anzahl Reservierungen - Anzahl erfüllte Reservierungen)
+    """
+    try:
+        query_manager = QueryManager()
+        fulfillment_metrics = query_manager.get_reservation_fulfillment_rate(
+            agency_id=agency_id,
+            time_period=time_period
+        )
+        return fulfillment_metrics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch fulfillment rate: {str(e)}")
+
+@router.get("/{agency_id}/reservation-fulfillment")
+async def get_reservation_fulfillment_rate(
+    agency_id: str,
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Get reservation fulfillment rate for a specific agency
     (Quote 2: Anzahl Reservierungen - Anzahl erfüllte Reservierungen)
     """
     try:
@@ -55,7 +79,7 @@ async def get_fulfillment_rate(
         )
         return fulfillment_metrics
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch fulfillment rate: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch reservation fulfillment rate: {str(e)}")
 
 @router.get("/{agency_id}/withdrawal")
 async def get_withdrawal_rate(
@@ -96,23 +120,45 @@ async def get_pending_rate(
         raise HTTPException(status_code=500, detail=f"Failed to fetch pending rate: {str(e)}")
 
 @router.get("/{agency_id}/arrival")
-async def get_arrival_rate(
+async def get_arrival_metrics(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
     """
-    Get arrival rate for a specific agency
-    (Quote 5: Reservierung mit Personalvorschlag erfüllt - Pflegeeinsatz angetreten)
+    Get arrival metrics for a specific agency, differenziert nach Erst- und Folgeeinsätzen.
+    Includes counts for different stages with the following flow:
+    - All care stays (total)
+    - First-time stays only (is_swap = false)
+    - Follow-up stays only (is_swap = true)
+    
+    Stages follow this workflow:
+    1. Reservation (reservation_fulfillment_count): Agentur reserviert einen freien Platz für ein Posting
+    2. Personalvorschlag (pv_count): Care Stay wird erstellt mit Status "Neu" (jeder PV erzeugt einen Care Stay)
+    3. "Vorgestellt": Status nach Vorstellung beim Kunden
+    4. "Angenommen": Status nach Akzeptanz durch den Kunden (accepted_count)
+    5. "Bestätigt": Status nach Bestätigung durch die Pflegekraft (confirmed_count)
+    6. "Anreise": Tatsächliche Anreise, wenn nicht vorher abgebrochen (arrived_count)
+    
+    Notes:
+    - For follow-up stays, reservation_fulfillment_count is always 0 as reservations are only possible for new postings
+    - "PV count" counts all care stays (each care stay is a Personalvorschlag, regardless of status)
+    - "Accepted" counts care stays that have reached status "Angenommen"
+    - "Confirmed" counts care stays that have reached status "Bestätigt" (should be ≤ accepted)
+    - "Arrived" counts care stays that have reached status "Bestätigt", have a valid arrival date, 
+      and were NOT canceled before arrival (should be ≤ confirmed)
+    
+    Each category provides ratios between these stages, including the new pv_to_arrival_ratio.
+    (Related to Quote 5)
     """
     try:
         query_manager = QueryManager()
-        arrival_metrics = query_manager.get_arrival_rate(
+        arrival_metrics = query_manager.get_arrival_metrics(
             agency_id=agency_id,
             time_period=time_period
         )
         return arrival_metrics
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch arrival rate: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch arrival metrics: {str(e)}")
 
 @router.get("/{agency_id}/cancellation-before-arrival")
 async def get_cancellation_before_arrival_rate(
@@ -155,7 +201,9 @@ async def get_completion_rate(
 @router.get("/{agency_id}/all")
 async def get_all_quotas(
     agency_id: str,
-    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$"),
+    start_date: str = Query(None, description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(None, description="End date in YYYY-MM-DD format")
 ):
     """
     Get all quota metrics for a specific agency
@@ -164,6 +212,8 @@ async def get_all_quotas(
         query_manager = QueryManager()
         all_quotas = query_manager.get_all_quotas(
             agency_id=agency_id,
+            start_date=start_date,
+            end_date=end_date,
             time_period=time_period
         )
         return all_quotas
@@ -191,7 +241,13 @@ async def get_custom_metrics(request: Dict[str, Any]):
                 time_period=time_period
             )
         elif metrics_type == "fulfillment":
-            metrics = query_manager.get_fulfillment_rate(
+            # Deprecated but still supported for backwards compatibility
+            metrics = query_manager.get_reservation_fulfillment_rate(
+                agency_id=agency_id,
+                time_period=time_period
+            )
+        elif metrics_type == "reservation-fulfillment":
+            metrics = query_manager.get_reservation_fulfillment_rate(
                 agency_id=agency_id,
                 time_period=time_period
             )
@@ -206,7 +262,7 @@ async def get_custom_metrics(request: Dict[str, Any]):
                 time_period=time_period
             )
         elif metrics_type == "arrival":
-            metrics = query_manager.get_arrival_rate(
+            metrics = query_manager.get_arrival_metrics(
                 agency_id=agency_id,
                 time_period=time_period
             )
@@ -249,6 +305,7 @@ async def get_overall_cancellation_stats(
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch overall cancellation before arrival stats: {str(e)}")
+
 
 # Include other routers if necessary
 # from . import other_router

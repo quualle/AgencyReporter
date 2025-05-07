@@ -15,6 +15,9 @@ from .bigquery_connection import BigQueryConnection
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Silence specific warnings
+logging.getLogger(__name__).setLevel(logging.ERROR)
+
 class QueryManager:
     """
     A class to manage BigQuery queries, including loading, executing, and caching.
@@ -49,6 +52,7 @@ class QueryManager:
                 # Quote 1: Gesamtzahl Stellen - Reservierungen getätigt
                 "GET_TOTAL_POSTINGS": quotas.GET_TOTAL_POSTINGS,
                 "GET_AGENCY_RESERVATIONS": quotas.GET_AGENCY_RESERVATIONS,
+                "GET_UNIQUE_POSTING_RESERVATIONS": quotas.GET_UNIQUE_POSTING_RESERVATIONS,
                 
                 # Quote 2: Anzahl Reservierungen - Anzahl erfüllte Reservierungen
                 "GET_FULFILLED_RESERVATIONS": quotas.GET_FULFILLED_RESERVATIONS,
@@ -59,9 +63,25 @@ class QueryManager:
                 # Quote 4: Anzahl Reservierungen - Anzahl pending Reservierungen
                 "GET_PENDING_RESERVATIONS": quotas.GET_PENDING_RESERVATIONS,
                 
-                # Quote 5: Erfüllte Reservierungen - Pflegeeinsatz angetreten
+                # Quote 5: Erfüllte Reservierungen - Pflegeeinsatz angetreten (und weitere Schritte)
                 "GET_STARTED_CARE_STAYS": quotas.GET_STARTED_CARE_STAYS,
                 "GET_STARTED_FIRST_CARE_STAYS": quotas.GET_STARTED_FIRST_CARE_STAYS,
+                "GET_ACCEPTED_CARE_STAYS": quotas.GET_ACCEPTED_CARE_STAYS,
+                "GET_ACCEPTED_FIRST_CARE_STAYS": quotas.GET_ACCEPTED_FIRST_CARE_STAYS,
+                "GET_ACCEPTED_FOLLOW_CARE_STAYS": quotas.GET_ACCEPTED_FOLLOW_CARE_STAYS,
+                "GET_CONFIRMED_CARE_STAYS": quotas.GET_CONFIRMED_CARE_STAYS,
+                "GET_CONFIRMED_FIRST_CARE_STAYS": quotas.GET_CONFIRMED_FIRST_CARE_STAYS,
+                "GET_CONFIRMED_FOLLOW_CARE_STAYS": quotas.GET_CONFIRMED_FOLLOW_CARE_STAYS,
+                "GET_SIMPLE_ARRIVED_FIRST_CARE_STAYS": quotas.GET_SIMPLE_ARRIVED_FIRST_CARE_STAYS,
+                "GET_SIMPLE_ARRIVED_FOLLOW_CARE_STAYS": quotas.GET_SIMPLE_ARRIVED_FOLLOW_CARE_STAYS,
+                "GET_SIMPLE_ARRIVED_ALL_CARE_STAYS": quotas.GET_SIMPLE_ARRIVED_ALL_CARE_STAYS,
+                "GET_FULFILLED_RESERVATIONS_FIRST_STAYS": quotas.GET_FULFILLED_RESERVATIONS_FIRST_STAYS,
+                "GET_FULFILLED_RESERVATIONS_FOLLOW_STAYS": quotas.GET_FULFILLED_RESERVATIONS_FOLLOW_STAYS,
+                
+                # Neue PV-Count Queries
+                "GET_PV_COUNT": quotas.GET_PV_COUNT,
+                "GET_PV_FIRST_COUNT": quotas.GET_PV_FIRST_COUNT,
+                "GET_PV_FOLLOW_COUNT": quotas.GET_PV_FOLLOW_COUNT,
                 
                 # Quote 6: Personalvorschläge - VOR Anreise abgebrochene
                 "GET_PERSONNEL_PROPOSALS": quotas.GET_PERSONNEL_PROPOSALS,
@@ -190,8 +210,15 @@ class QueryManager:
         if not start_date or not end_date:
             start_date, end_date = self._calculate_date_range(time_period)
         
-        # Get agency reservations
-        reservation_results = self.execute_query("GET_AGENCY_RESERVATIONS", {
+        # Get agency reservations with unique postings
+        reservation_results = self.execute_query("GET_UNIQUE_POSTING_RESERVATIONS", {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        })
+        
+        # Also get total reservations for reference
+        total_reservation_results = self.execute_query("GET_AGENCY_RESERVATIONS", {
             "agency_id": agency_id,
             "start_date": start_date,
             "end_date": end_date
@@ -199,16 +226,18 @@ class QueryManager:
         
         # Calculate posting-to-reservation ratio
         posting_metrics = self.get_posting_metrics(start_date, end_date)
-        reservation_count = reservation_results[0]["anzahl_reservierungen"] if reservation_results else 0
+        reserved_postings = reservation_results[0]["anzahl_reservierungen"] if reservation_results else 0
+        total_reservation_count = total_reservation_results[0]["anzahl_reservierungen"] if total_reservation_results else 0
         posting_count = posting_metrics.get("posting_count", 0)
         
         ratio = 0
         if posting_count > 0:
-            ratio = reservation_count / posting_count
+            ratio = reserved_postings / posting_count
         
         result = {
             "agency_id": agency_id,
-            "reservation_count": reservation_count,
+            "reserved_postings": reserved_postings,
+            "total_reservation_count": total_reservation_count,
             "total_posting_count": posting_count,
             "posting_to_reservation_ratio": ratio,
             "ratio_percentage": f"{ratio * 100:.1f}%",
@@ -221,7 +250,7 @@ class QueryManager:
         
         return result
         
-    def get_fulfillment_rate(self, agency_id: str, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> Dict[str, Any]:
+    def get_reservation_fulfillment_rate(self, agency_id: str, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> Dict[str, Any]:
         """
         Quote 2: Anzahl Reservierungen - Anzahl erfüllte Reservierungen
         Zeigt wie viel % Ihrer Reservierungen die Agentur schlussendlich auch mit einem BK Vorschlag erfüllt hat
@@ -233,7 +262,7 @@ class QueryManager:
             time_period (str, optional): Predefined time period (last_quarter, last_month, etc.)
             
         Returns:
-            dict: Dictionary with fulfillment metrics
+            dict: Dictionary with reservation fulfillment metrics
         """
         # Calculate date range if not provided
         if not start_date or not end_date:
@@ -272,9 +301,11 @@ class QueryManager:
             "agency_name": agency_name,
             "reservation_count": reservation_count,
             "fulfilled_count": fulfilled_count,
-            "fulfillment_ratio": ratio,
+            "reservation_fulfillment_ratio": ratio,
+            "reservation_fulfillment_rate": ratio,
+            "fulfillment_rate": ratio,  # For backward compatibility
             "ratio_percentage": f"{ratio * 100:.1f}%",
-            "name": "Erfüllungsrate",
+            "name": "Reservierungs-Erfüllungsrate",
             "description": "Zeigt wie viel % Ihrer Reservierungen die Agentur schlussendlich auch mit einem BK Vorschlag erfüllt hat"
         }
         
@@ -392,10 +423,10 @@ class QueryManager:
             "description": "Zeigt, wie viele % der reservierungen, die eine Agentur getätigt hat, dannach weder zurückgezogen noch erfüllt wurden - also einfach liegen gelassen!"
         }
         
-    def get_arrival_rate(self, agency_id: str, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> Dict[str, Any]:
+    def get_arrival_metrics(self, agency_id: str, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> Dict[str, Any]:
         """
-        Quote 5: Reservierung mit Personalvorschlag erfüllt - Pflegeeinsatz angetreten
-        Zeigt wie viel % der vorgeschlagenen Pflegekräfte schlussendlich auch wirklich angereist sind
+        Quote 5 related metrics: PV -> Accepted -> Confirmed -> Arrival
+        Differenziert nach Ersteinsätzen (Neukunden) und Folgeeinsätzen (Wechsel)
         
         Args:
             agency_id (str): The ID of the agency
@@ -404,49 +435,140 @@ class QueryManager:
             time_period (str, optional): Predefined time period (last_quarter, last_month, etc.)
             
         Returns:
-            dict: Dictionary with arrival metrics
+            dict: Dictionary with arrival-related metrics, differenziert by is_swap
         """
         # Calculate date range if not provided
         if not start_date or not end_date:
             start_date, end_date = self._calculate_date_range(time_period)
         
-        # Get fulfilled reservations for this agency
-        fulfilled_results = self.execute_query("GET_FULFILLED_RESERVATIONS", {
+        params = {
             "agency_id": agency_id,
             "start_date": start_date,
             "end_date": end_date
-        })
+        }
         
-        # Get started care stays for this agency (nur erste Einsätze, keine Folgeeinsätze)
-        started_results = self.execute_query("GET_STARTED_FIRST_CARE_STAYS", {
-            "agency_id": agency_id,
-            "start_date": start_date,
-            "end_date": end_date
-        })
+        # Get counts for each stage - Gesamt (alle Einsätze)
+        # Bisherig: Erfüllte Reservierungen
+        reservation_fulfillment_results = self.execute_query("GET_FULFILLED_RESERVATIONS", params)
+        # Neu: Personalvorschläge (alle Care Stays)
+        pv_results_total = self.execute_query("GET_PV_COUNT", params)
+        accepted_results_total = self.execute_query("GET_ACCEPTED_CARE_STAYS", params)
+        confirmed_results_total = self.execute_query("GET_CONFIRMED_CARE_STAYS", params)
+        arrived_results_total = self.execute_query("GET_SIMPLE_ARRIVED_ALL_CARE_STAYS", params)
         
-        # Calculate arrival rate
-        fulfilled_count = fulfilled_results[0]["fulfilled_reservations_count"] if fulfilled_results else 0
-        started_count = started_results[0]["successfully_started_care_stays_count"] if started_results else 0
+        # Get counts for each stage - Nur Ersteinsätze (is_swap = false)
+        # Bisherig: Erfüllte Reservierungen für Ersteinsätze
+        reservation_fulfillment_first = self.execute_query("GET_FULFILLED_RESERVATIONS_FIRST_STAYS", params)
+        # Neu: Personalvorschläge für Ersteinsätze
+        pv_results_first = self.execute_query("GET_PV_FIRST_COUNT", params)
+        accepted_results_first = self.execute_query("GET_ACCEPTED_FIRST_CARE_STAYS", params)
+        confirmed_results_first = self.execute_query("GET_CONFIRMED_FIRST_CARE_STAYS", params)
+        arrived_results_first = self.execute_query("GET_SIMPLE_ARRIVED_FIRST_CARE_STAYS", params)
         
-        ratio = 0
-        if fulfilled_count > 0:
-            ratio = started_count / fulfilled_count
+        # Get counts for each stage - Nur Folgeeinsätze (is_swap = true)
+        # Bei Folgeeinsätzen gibt es keine Reservierungen, daher nur PV, accepted, confirmed, arrived
+        pv_results_follow = self.execute_query("GET_PV_FOLLOW_COUNT", params)
+        accepted_results_follow = self.execute_query("GET_ACCEPTED_FOLLOW_CARE_STAYS", params)
+        confirmed_results_follow = self.execute_query("GET_CONFIRMED_FOLLOW_CARE_STAYS", params)
+        arrived_results_follow = self.execute_query("GET_SIMPLE_ARRIVED_FOLLOW_CARE_STAYS", params)
         
-        agency_name = None
-        if fulfilled_results:
-            agency_name = fulfilled_results[0]["agency_name"]
-        elif started_results:
-            agency_name = started_results[0]["agency_name"]
+        # Extrahiere Anzahlen - Gesamt
+        reservation_fulfillment_count = reservation_fulfillment_results[0]["fulfilled_reservations_count"] if reservation_fulfillment_results else 0
+        pv_count_total = pv_results_total[0]["pv_count"] if pv_results_total else 0
+        accepted_count_total = accepted_results_total[0]["accepted_care_stays_count"] if accepted_results_total else 0
+        confirmed_count_total = confirmed_results_total[0]["confirmed_care_stays_count"] if confirmed_results_total else 0
+        arrived_count_total = arrived_results_total[0]["simple_arrived_all_care_stays_count"] if arrived_results_total else 0
         
+        # Extrahiere Anzahlen - Ersteinsätze
+        reservation_fulfillment_first_count = reservation_fulfillment_first[0]["fulfilled_first_reservations_count"] if reservation_fulfillment_first else 0
+        pv_count_first = pv_results_first[0]["pv_first_count"] if pv_results_first else 0
+        accepted_count_first = accepted_results_first[0]["accepted_first_care_stays_count"] if accepted_results_first else 0
+        confirmed_count_first = confirmed_results_first[0]["confirmed_first_care_stays_count"] if confirmed_results_first else 0
+        arrived_count_first = arrived_results_first[0]["simple_arrived_first_care_stays_count"] if arrived_results_first else 0
+        
+        # Extrahiere Anzahlen - Folgeeinsätze
+        pv_count_follow = pv_results_follow[0]["pv_follow_count"] if pv_results_follow else 0
+        accepted_count_follow = accepted_results_follow[0]["accepted_follow_care_stays_count"] if accepted_results_follow else 0
+        confirmed_count_follow = confirmed_results_follow[0]["confirmed_follow_care_stays_count"] if confirmed_results_follow else 0
+        arrived_count_follow = arrived_results_follow[0]["simple_arrived_follow_care_stays_count"] if arrived_results_follow else 0
+        
+        # Calculate ratios - Gesamt
+        # Für Kompatibilität: Behalte die alte arrival_rate Berechnung (reservation_fulfillment zu arrived)
+        # Begrenze das Verhältnis auf maximal 1.0 (100%)
+        arrival_rate = min(arrived_count_total / max(1, reservation_fulfillment_count), 1.0)
+        
+        # Neue Ratios basierend auf PV statt erfüllten Reservierungen
+        # Begrenze alle Verhältnisse auf maximal 1.0 (100%)
+        pv_to_arrival_ratio_total = min(arrived_count_total / max(1, pv_count_total), 1.0)
+        accepted_to_arrival_ratio_total = min(arrived_count_total / max(1, accepted_count_total), 1.0)
+        confirmed_to_arrival_ratio_total = min(arrived_count_total / max(1, confirmed_count_total), 1.0)
+        
+        # Calculate ratios - Ersteinsätze
+        # Alte Ratio (erfüllte Reservierungen zu Anreise)
+        reservation_fulfillment_to_arrival_ratio_first = min(arrived_count_first / max(1, reservation_fulfillment_first_count), 1.0)
+        # Neue Ratio (PV zu Anreise)
+        pv_to_arrival_ratio_first = min(arrived_count_first / max(1, pv_count_first), 1.0)
+        accepted_to_arrival_ratio_first = min(arrived_count_first / max(1, accepted_count_first), 1.0)
+        confirmed_to_arrival_ratio_first = min(arrived_count_first / max(1, confirmed_count_first), 1.0)
+        
+        # Calculate ratios - Folgeeinsätze
+        pv_to_arrival_ratio_follow = min(arrived_count_follow / max(1, pv_count_follow), 1.0)
+        accepted_to_arrival_ratio_follow = min(arrived_count_follow / max(1, accepted_count_follow), 1.0)
+        confirmed_to_arrival_ratio_follow = min(arrived_count_follow / max(1, confirmed_count_follow), 1.0)
+        
+        # Bestimmen des Agency-Namens
+        agency_name = (pv_results_total[0]["agency_name"] if pv_results_total else 
+                       (accepted_results_total[0]["agency_name"] if accepted_results_total else 
+                       (confirmed_results_total[0]["agency_name"] if confirmed_results_total else 
+                       (arrived_results_total[0]["agency_name"] if arrived_results_total else None))))
+        
+        # Vorbereiten der differenzierten Metriken
         return {
             "agency_id": agency_id,
             "agency_name": agency_name,
-            "fulfilled_count": fulfilled_count,
-            "started_count": started_count,
-            "arrival_ratio": ratio,
-            "ratio_percentage": f"{ratio * 100:.1f}%",
-            "name": "Anreiserate",
-            "description": "Zeigt wie viel % der vorgeschlagenen Pflegekräfte schlussendlich auch wirklich angereist sind (nur Ersteinsätze)"
+            
+            # Compatibility field for existing code
+            "arrival_rate": arrival_rate,
+            
+            # Gesamt (alle Einsätze)
+            "total": {
+                "reservation_fulfillment_count": reservation_fulfillment_count,  # Umbenennung (alt: fulfilled_count)
+                "pv_count": pv_count_total,  # Neu: Anzahl aller Personalvorschläge
+                "accepted_count": accepted_count_total,
+                "confirmed_count": confirmed_count_total,
+                "arrived_count": arrived_count_total,
+                "reservation_fulfillment_to_arrival_ratio": arrival_rate,  # Umbenennung (alt: fulfilled_to_arrival_ratio)
+                "pv_to_arrival_ratio": pv_to_arrival_ratio_total,  # Neu
+                "accepted_to_arrival_ratio": accepted_to_arrival_ratio_total,
+                "confirmed_to_arrival_ratio": confirmed_to_arrival_ratio_total
+            },
+            
+            # Nur Ersteinsätze (is_swap = false)
+            "first_stays": {
+                "reservation_fulfillment_count": reservation_fulfillment_first_count,  # Umbenennung
+                "pv_count": pv_count_first,  # Neu
+                "accepted_count": accepted_count_first,
+                "confirmed_count": confirmed_count_first,
+                "arrived_count": arrived_count_first,
+                "reservation_fulfillment_to_arrival_ratio": reservation_fulfillment_to_arrival_ratio_first,  # Umbenennung
+                "pv_to_arrival_ratio": pv_to_arrival_ratio_first,  # Neu
+                "accepted_to_arrival_ratio": accepted_to_arrival_ratio_first,
+                "confirmed_to_arrival_ratio": confirmed_to_arrival_ratio_first
+            },
+            
+            # Nur Folgeeinsätze (is_swap = true)
+            "follow_stays": {
+                "pv_count": pv_count_follow,  # Neu
+                "accepted_count": accepted_count_follow,
+                "confirmed_count": confirmed_count_follow,
+                "arrived_count": arrived_count_follow,
+                "pv_to_arrival_ratio": pv_to_arrival_ratio_follow,  # Neu
+                "accepted_to_arrival_ratio": accepted_to_arrival_ratio_follow,
+                "confirmed_to_arrival_ratio": confirmed_to_arrival_ratio_follow
+            },
+            
+            "name": "Anreiseraten",
+            "description": "Zeigt die Raten von Personalvorschlägen (PV), akzeptierten und bestätigten Vorschlägen zur tatsächlichen Anreise, differenziert nach Erst- und Folgeeinsätzen."
         }
         
     def get_cancellation_before_arrival_rate(self, agency_id: str, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> Dict[str, Any]:
@@ -518,6 +640,7 @@ class QueryManager:
             "agency_name": agency_name,
             "proposal_count": proposal_count,
             "cancellation_ratio_gesamt": f"{gesamt_ratio * 100:.1f}%",
+            "cancellation_rate": gesamt_ratio,  # Numerischer Wert hinzugefügt für bessere Kompatibilität
             "cancellation_buckets": buckets,
             "name": "Abbruchrate vor Anreise",
             "description": "Zeigt, wie viel % der vorgeschlagenen Pflegekräfte von der Agentur wieder abgebrochen wurden (vor Anreise), aufgeschlüsselt nach Kurzfristigkeit und Erstanreise/Wechsel."
@@ -582,7 +705,7 @@ class QueryManager:
     
     def get_all_quotas(self, agency_id: str, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> Dict[str, Any]:
         """
-        Get all quota metrics for a specific agency
+        Get all quota metrics for a specific agency and industry average
         
         Args:
             agency_id (str): The ID of the agency
@@ -593,32 +716,78 @@ class QueryManager:
         Returns:
             dict: Dictionary with all quota metrics
         """
-        # Calculate date range if not provided
         if not start_date or not end_date:
             start_date, end_date = self._calculate_date_range(time_period)
             
-        # Get agency details
-        agency_details = self.get_agency_details(agency_id)
-        agency_name = agency_details.get("agency_name", "Unknown Agency")
+        # Get reservation rate
+        reservation_metrics = self.get_agency_reservation_metrics(agency_id, start_date, end_date, time_period)
         
-        # Get all quotas
-        quotas = {
-            "quota1_reservation": self.get_agency_reservation_metrics(agency_id, start_date, end_date),
-            "quota2_fulfillment": self.get_fulfillment_rate(agency_id, start_date, end_date),
-            "quota3_withdrawal": self.get_withdrawal_rate(agency_id, start_date, end_date),
-            "quota4_pending": self.get_pending_rate(agency_id, start_date, end_date),
-            "quota5_arrival": self.get_arrival_rate(agency_id, start_date, end_date),
-            "quota6_cancellation": self.get_cancellation_before_arrival_rate(agency_id, start_date, end_date),
-            "quota7_completion": self.get_completion_rate(agency_id, start_date, end_date)
+        # Get reservation fulfillment rate
+        reservation_fulfillment_metrics = self.get_reservation_fulfillment_rate(agency_id, start_date, end_date, time_period)
+        
+        # Get cancellation before arrival rate
+        cancellation_metrics = self.get_cancellation_before_arrival_rate(agency_id, start_date, end_date, time_period)
+        
+        # Get completion rate
+        completion_metrics = self.get_completion_rate(agency_id, start_date, end_date, time_period)
+
+        # Get posting metrics to get the total number of postings
+        posting_metrics = self.get_posting_metrics(start_date, end_date)
+        
+        # Simplified structure - no need to calculate data for all agencies 
+        # since not used actively in frontend
+        all_agencies_data = []
+        
+        # Simplified industry_average structure with empty values 
+        # (removed complex calculations since not used in frontend)
+        industry_average = {
+            "reservation_rate": 0,
+            "reservation_fulfillment_rate": 0,
+            "cancellation_rate": 0,
+            "start_rate": 0,
+            "accepted_to_arrival_rate": 0,
+            "confirmed_to_arrival_rate": 0,
+            "completion_rate": 0,
+            "early_end_rate": 0,
+            "avg_reserved_postings": 0,
+            "reserved_postings": 0,
+            "total_reservation_count": 0,
+            "total_postings": posting_metrics.get("posting_count", 0)
         }
         
+        # Get arrival metrics for selected agency
+        arrival_metrics = self.get_arrival_metrics(agency_id, start_date, end_date, time_period)
+
+        # Compile and return all results
         return {
             "agency_id": agency_id,
-            "agency_name": agency_name,
+            "agency_name": reservation_metrics.get("agency_name", ""),
             "time_period": time_period,
             "start_date": start_date,
             "end_date": end_date,
-            "quotas": quotas
+            "selected_agency": {
+                "agency_id": agency_id,
+                "agency_name": reservation_metrics.get("agency_name", ""),
+                "reservation_rate": reservation_metrics.get("posting_to_reservation_ratio", 0),
+                "reservation_fulfillment_rate": reservation_fulfillment_metrics.get("reservation_fulfillment_rate", 0),
+                "cancellation_rate": cancellation_metrics.get("cancellation_rate", 0),
+                "start_rate": arrival_metrics.get("arrival_rate", 0), # fulfilled_to_arrival
+                
+                # Differenzierte Anreisemetriken
+                "arrival_metrics": {
+                    "total": arrival_metrics.get("total", {}),
+                    "first_stays": arrival_metrics.get("first_stays", {}),
+                    "follow_stays": arrival_metrics.get("follow_stays", {})
+                },
+                
+                "completion_rate": completion_metrics.get("completion_rate", 0),
+                "early_end_rate": 1 - completion_metrics.get("completion_rate", 0) if completion_metrics.get("completion_rate") is not None else None,
+                "reserved_postings": reservation_metrics.get("reserved_postings", 0),
+                "total_reservation_count": reservation_metrics.get("total_reservation_count", 0),
+                "total_postings": posting_metrics.get("posting_count", 0),  # Add total_postings from posting_metrics
+            },
+            "industry_average": industry_average,
+            "all_agencies": all_agencies_data
         }
     
     def _calculate_date_range(self, time_period: str) -> tuple:
@@ -714,3 +883,24 @@ class QueryManager:
                 }
             }
         return {"avg_proposal_count": None, "avg_cancellation_ratio_gesamt": None, "avg_cancellation_buckets": {}}
+
+    def get_fulfillment_rate(self, agency_id: str, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> Dict[str, Any]:
+        """
+        [DEPRECATED] Use get_reservation_fulfillment_rate instead.
+        Quote 2: Anzahl Reservierungen - Anzahl erfüllte Reservierungen
+        Zeigt wie viel % Ihrer Reservierungen die Agentur schlussendlich auch mit einem BK Vorschlag erfüllt hat
+        
+        Args:
+            agency_id (str): The ID of the agency
+            start_date (str, optional): Start date in 'YYYY-MM-DD' format
+            end_date (str, optional): End date in 'YYYY-MM-DD' format
+            time_period (str, optional): Predefined time period (last_quarter, last_month, etc.)
+            
+        Returns:
+            dict: Dictionary with fulfillment metrics
+        """
+        # Log deprecation warning
+        logger.warning("get_fulfillment_rate is deprecated, use get_reservation_fulfillment_rate instead")
+        
+        # Call the new function
+        return self.get_reservation_fulfillment_rate(agency_id, start_date, end_date, time_period)

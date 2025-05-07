@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Every Sql Query that is being used in the API must also be saved at the end of the readme.md, so that the user can take it at every time and test it in bigquery-webgui.
+
+
+
+

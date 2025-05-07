@@ -9,6 +9,7 @@ import ResponseTimesPage from './pages/ResponseTimesPage';
 import QualityPage from './pages/QualityPage';
 import StrengthWeaknessPage from './pages/StrengthWeaknessPage';
 import LLMAnalysisPage from './pages/LLMAnalysisPage';
+import ProblematicStaysPage from './pages/ProblematicStaysPage';
 
 // Import layout components
 import Header from './components/layout/Header';
@@ -28,6 +29,7 @@ const App: React.FC = () => {
             <Route path="/quality" element={<QualityPage />} />
             <Route path="/strength-weakness" element={<StrengthWeaknessPage />} />
             <Route path="/llm-analysis" element={<LLMAnalysisPage />} />
+            <Route path="/problematic-stays" element={<ProblematicStaysPage />} />
           </Routes>
         </main>
       </div>

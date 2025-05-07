@@ -4,6 +4,8 @@ from ..utils.query_manager import QueryManager
 from ..utils.bigquery_connection import BigQueryConnection
 from ..models import TimeFilter, AgencyRequest
 from ..dependencies import get_settings
+from ..queries.quotas.quotas_with_reasons import GET_ALL_PROBLEM_CASES
+from datetime import datetime, timedelta
 
 router = APIRouter()
 
@@ -64,6 +66,63 @@ async def get_agency_early_end_reasons(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch early end reasons: {str(e)}")
+
+@router.get("/{agency_id}/all-problem-cases")
+async def get_all_problem_cases(
+    agency_id: str,
+    start_date: str = QueryParam(None),
+    end_date: str = QueryParam(None),
+    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Get all problem cases (cancelled first stays, cancelled follow stays, shortened stays) for a specific agency
+    """
+    try:
+        # Setup date range based on time_period or explicit start/end dates
+        today = datetime.now()
+        
+        if not start_date:
+            if time_period == "last_month":
+                start_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+            elif time_period == "last_quarter":
+                start_date = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+            elif time_period == "last_year":
+                start_date = (today - timedelta(days=365)).strftime("%Y-%m-%d")
+            else:  # all_time
+                start_date = "2020-01-01"  # Earliest relevant data
+        
+        if not end_date:
+            end_date = today.strftime("%Y-%m-%d")
+            
+        # Use the query manager to execute the query
+        query_manager = QueryManager()
+        connection = BigQueryConnection()
+        
+        # Execute the query with parameters
+        query_params = {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        
+        results = connection.execute_query(GET_ALL_PROBLEM_CASES, query_params)
+        
+        # Process and format the results
+        problem_cases = []
+        for row in results:
+            problem_case = dict(row.items())
+            problem_cases.append(problem_case)
+            
+        return {
+            "agency_id": agency_id,
+            "time_period": time_period,
+            "start_date": start_date,
+            "end_date": end_date,
+            "problem_cases": problem_cases,
+            "total_count": len(problem_cases)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch problem cases: {str(e)}")
 
 @router.post("/custom-analysis")
 async def get_custom_quota_analysis(request: Dict[str, Any]):

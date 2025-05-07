@@ -108,3 +108,4 @@ data/*.db
 
 # Local data
 data/local/ 
+**/.claude/settings.local.json

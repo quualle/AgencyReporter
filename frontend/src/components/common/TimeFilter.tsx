@@ -59,6 +59,21 @@ export const calculateDateRange = (timePeriod: string): { startDate: string, end
         case 'all_time':
             startDate = new Date(2000, 0, 1); // Frühes Datum für "all time"
             break;
+        case 'same_quarter_last_year': // Spezieller Fall für historischen Vergleich
+            const oneYearAgo = subYears(now, 1);
+            startDate = getQuarterStart(oneYearAgo);
+            endDate = getQuarterEnd(oneYearAgo);
+            break;
+        case 'two_quarters_ago': // Spezieller Fall für historischen Vergleich
+            const twoQuartersAgo = subQuarters(now, 2);
+            startDate = getQuarterStart(twoQuartersAgo);
+            endDate = getQuarterEnd(twoQuartersAgo);
+            break;
+        case 'two_years_ago': // Spezieller Fall für historischen Vergleich
+            const twoYearsAgo = subYears(now, 2);
+            startDate = startOfYear(twoYearsAgo);
+            endDate = endOfYear(twoYearsAgo);
+            break;
         default:
             startDate = getQuarterStart(subQuarters(now, 1)); // Default: last_quarter
             endDate = getQuarterEnd(subQuarters(now, 1));

@@ -14,10 +14,10 @@ WITH total_carestays AS (
   FROM
     `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
   JOIN
-    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c.sys_id
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
   WHERE
     (c.agency_id = @agency_id OR @agency_id IS NULL)
-    AND cs.created_at BETWEEN @start_date AND @end_date
+    AND SUBSTR(cs.created_at, 1, 10) BETWEEN @start_date AND @end_date
   GROUP BY
     c.agency_id
 ),
@@ -97,7 +97,7 @@ problematic_stats AS (
   FROM
     `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
   WHERE
-    p.analysis_status = 'completed'
+    p.analysis_status = 'analyzed'
     AND (p.agency_id = @agency_id OR @agency_id IS NULL)
     AND p.event_date BETWEEN @start_date AND @end_date
   GROUP BY
@@ -204,7 +204,7 @@ SELECT
 FROM
   `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
 WHERE
-  p.analysis_status = 'completed'
+  p.analysis_status = 'analyzed'
   AND (p.agency_id = @agency_id OR @agency_id IS NULL)
   AND p.event_date BETWEEN @start_date AND @end_date
   AND (p.event_type = @event_type OR @event_type IS NULL)
@@ -231,7 +231,7 @@ SELECT
 FROM
   `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
 WHERE
-  p.analysis_status = 'completed'
+  p.analysis_status = 'analyzed'
   AND (p.agency_id = @agency_id OR @agency_id IS NULL)
   AND p.event_date BETWEEN @start_date AND @end_date
   AND (p.event_type = @event_type OR @event_type IS NULL)
@@ -240,4 +240,131 @@ GROUP BY
   p.agency_id, p.agency_name, p.event_type, p.stay_type, event_month
 ORDER BY
   p.agency_id, event_month, p.event_type, p.stay_type
+"""
+
+# Abfrage für die Heatmap der Abbruchgründe nach Agentur
+GET_PROBLEMATIC_STAYS_HEATMAP = """
+SELECT
+  p.agency_id,
+  p.agency_name,
+  JSON_EXTRACT_SCALAR(p.analysis_result, '$.selected_reason') AS reason,
+  p.event_type,
+  COUNT(*) AS count,
+  SUM(COUNT(*)) OVER (PARTITION BY p.agency_id) AS agency_total,
+  ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (PARTITION BY p.agency_id), 1) AS percentage
+FROM
+  `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
+WHERE
+  p.analysis_status = 'analyzed'
+  AND (p.agency_id = @agency_id OR @agency_id IS NULL)
+  AND p.event_date BETWEEN @start_date AND @end_date
+  AND (p.event_type = @event_type OR @event_type IS NULL)
+  AND (p.stay_type = @stay_type OR @stay_type IS NULL)
+GROUP BY
+  p.agency_id, p.agency_name, reason, p.event_type
+ORDER BY
+  agency_total DESC, p.agency_id, reason
+"""
+
+# Abfrage für sofortige Abreisen (< 10 Tage nach Anreise)
+GET_PROBLEMATIC_STAYS_INSTANT_DEPARTURES = """
+SELECT
+  p.agency_id,
+  p.agency_name,
+  p.instant_departure_after,
+  COUNT(*) AS count,
+  JSON_EXTRACT_SCALAR(p.analysis_result, '$.selected_reason') AS reason,
+  JSON_EXTRACT_SCALAR(p.analysis_result, '$.customer_satisfaction') AS customer_satisfaction,
+  AVG(CAST(JSON_EXTRACT_SCALAR(p.analysis_result, '$.confidence') AS INT64)) AS avg_confidence,
+  COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (PARTITION BY p.agency_id) AS percentage_of_agency_problems
+FROM
+  `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
+WHERE
+  p.analysis_status = 'analyzed'
+  AND p.event_type = 'shortened_after_arrival'
+  AND p.instant_departure_after IS NOT NULL
+  AND p.instant_departure_after <= 9
+  AND (p.agency_id = @agency_id OR @agency_id IS NULL)
+  AND p.event_date BETWEEN @start_date AND @end_date
+GROUP BY
+  p.agency_id, p.agency_name, p.instant_departure_after, reason, customer_satisfaction
+ORDER BY
+  p.agency_id, p.instant_departure_after
+"""
+
+# Abfrage für Ersatz- und Folgeanalyse
+GET_PROBLEMATIC_STAYS_REPLACEMENT_ANALYSIS = """
+SELECT
+  p.agency_id,
+  p.agency_name,
+  p.event_type,
+  p.stay_type,
+  COUNT(*) AS total_count,
+  COUNTIF(p.has_replacement = TRUE) AS with_replacement_count,
+  COUNTIF(p.has_follow_up = TRUE) AS with_follow_up_count,
+  SAFE_DIVIDE(COUNTIF(p.has_replacement = TRUE), COUNTIF(p.event_type = 'cancelled_before_arrival')) * 100 AS replacement_percentage,
+  SAFE_DIVIDE(COUNTIF(p.has_follow_up = TRUE), COUNTIF(p.event_type = 'shortened_after_arrival')) * 100 AS follow_up_percentage
+FROM
+  `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
+WHERE
+  p.analysis_status = 'analyzed'
+  AND (p.agency_id = @agency_id OR @agency_id IS NULL)
+  AND p.event_date BETWEEN @start_date AND @end_date
+GROUP BY
+  p.agency_id, p.agency_name, p.event_type, p.stay_type
+ORDER BY
+  replacement_percentage DESC, follow_up_percentage DESC
+"""
+
+# Abfrage für Kundenzufriedenheitsanalyse
+GET_PROBLEMATIC_STAYS_CUSTOMER_SATISFACTION = """
+SELECT
+  p.agency_id,
+  p.agency_name,
+  JSON_EXTRACT_SCALAR(p.analysis_result, '$.customer_satisfaction') AS satisfaction,
+  JSON_EXTRACT_SCALAR(p.analysis_result, '$.selected_reason') AS reason,
+  p.event_type,
+  p.stay_type,
+  COUNT(*) AS count,
+  AVG(CAST(JSON_EXTRACT_SCALAR(p.analysis_result, '$.confidence_cussat') AS INT64)) AS avg_confidence,
+  COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (PARTITION BY p.agency_id) AS percentage
+FROM
+  `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
+WHERE
+  p.analysis_status = 'analyzed'
+  AND (p.agency_id = @agency_id OR @agency_id IS NULL)
+  AND p.event_date BETWEEN @start_date AND @end_date
+GROUP BY
+  p.agency_id, p.agency_name, satisfaction, reason, p.event_type, p.stay_type
+ORDER BY
+  p.agency_id, count DESC
+"""
+
+# Abfrage für Trend-Analyse über die Zeit
+GET_PROBLEMATIC_STAYS_TREND_ANALYSIS = """
+SELECT
+  p.agency_id,
+  p.agency_name,
+  FORMAT_DATE('%Y-%m', DATE(p.event_date)) AS event_month,
+  p.event_type,
+  p.stay_type,
+  COUNT(*) AS count,
+  COUNTIF(p.has_replacement = TRUE) AS with_replacement_count,
+  COUNTIF(p.has_follow_up = TRUE) AS with_follow_up_count,
+  COUNTIF(p.instant_departure_after IS NOT NULL AND p.instant_departure_after <= 9) AS instant_departure_count,
+  COUNTIF(JSON_EXTRACT_SCALAR(p.analysis_result, '$.customer_satisfaction') = 'satisfied') AS satisfied_count,
+  COUNTIF(JSON_EXTRACT_SCALAR(p.analysis_result, '$.customer_satisfaction') = 'not_satisfied') AS not_satisfied_count,
+  AVG(CAST(JSON_EXTRACT_SCALAR(p.analysis_result, '$.confidence') AS INT64)) AS avg_reason_confidence
+FROM
+  `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
+WHERE
+  p.analysis_status = 'analyzed'
+  AND (p.agency_id = @agency_id OR @agency_id IS NULL)
+  AND p.event_date BETWEEN @start_date AND @end_date
+  AND (p.event_type = @event_type OR @event_type IS NULL)
+  AND (p.stay_type = @stay_type OR @stay_type IS NULL)
+GROUP BY
+  p.agency_id, p.agency_name, event_month, p.event_type, p.stay_type
+ORDER BY
+  p.agency_id, event_month
 """ 

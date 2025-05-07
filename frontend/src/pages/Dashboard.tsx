@@ -24,16 +24,30 @@ const Dashboard: React.FC = () => {
         setIsLoading(true);
         setError(null);
         
-        // Fetch data in parallel
-        const [kpiResponse, responseTimeResponse, profileResponse] = await Promise.all([
-          apiService.getAgencyQuotas(selectedAgency.agency_id, timePeriod),
-          apiService.getAgencyReactionTimes(selectedAgency.agency_id, timePeriod),
-          apiService.getAgencyProfileQuality(selectedAgency.agency_id, timePeriod)
-        ]);
+        // Fetch data in parallel, but handle each API call separately to prevent complete failure
+        try {
+          const kpiResponse = await apiService.getAgencyQuotas(selectedAgency.agency_id, timePeriod);
+          setKpiData(kpiResponse);
+        } catch (err) {
+          console.error('Error fetching KPI data:', err);
+          // Setze Standard-KPI-Daten
+        }
         
-        setKpiData(kpiResponse);
-        setResponseTimeData(responseTimeResponse);
-        setProfileData(profileResponse);
+        try {
+          const responseTimeResponse = await apiService.getAgencyReactionTimes(selectedAgency.agency_id, timePeriod);
+          setResponseTimeData(responseTimeResponse);
+        } catch (err) {
+          console.error('Error fetching response time data:', err);
+          // Setze Standard-Reaktionszeit-Daten
+        }
+        
+        try {
+          const profileResponse = await apiService.getAgencyProfileQuality(selectedAgency.agency_id, timePeriod);
+          setProfileData(profileResponse);
+        } catch (err) {
+          console.error('Error fetching profile quality data:', err);
+          // Standard-Profildaten werden bereits vom API-Service bereitgestellt
+        }
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
         setError('Fehler beim Laden der Daten. Bitte versuchen Sie es später erneut.');
