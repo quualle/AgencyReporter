@@ -279,7 +279,7 @@ async def get_problematic_stays_detailed(
           JSON_EXTRACT_SCALAR(analysis_result, '$.comment') AS comment,
           analysis_timestamp
         FROM
-          `gcpxbixpflegehilfesenioren.Agencyreporter.problematic_stays`
+          `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays`
         WHERE
           analysis_status = 'completed'
           AND agency_id = @agency_id

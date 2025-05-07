@@ -9,15 +9,17 @@ GET_PROBLEMATIC_STAYS_OVERVIEW = """
 WITH total_carestays AS (
   -- Gesamtanzahl aller Pflegeeinsätze pro Agentur im Zeitraum
   SELECT
-    agency_id,
+    c.agency_id,
     COUNT(*) AS total_count
   FROM
-    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays`
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+  JOIN
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c.sys_id
   WHERE
-    (agency_id = @agency_id OR @agency_id IS NULL)
-    AND created_at BETWEEN @start_date AND @end_date
+    (c.agency_id = @agency_id OR @agency_id IS NULL)
+    AND cs.created_at BETWEEN @start_date AND @end_date
   GROUP BY
-    agency_id
+    c.agency_id
 ),
 problematic_stats AS (
   -- Statistiken zu problematischen Einsätzen
@@ -93,7 +95,7 @@ problematic_stats AS (
     AVG(CAST(JSON_EXTRACT_SCALAR(p.analysis_result, '$.confidence') AS INT64)) AS avg_reason_confidence,
     AVG(CAST(JSON_EXTRACT_SCALAR(p.analysis_result, '$.confidence_cussat') AS INT64)) AS avg_satisfaction_confidence
   FROM
-    `gcpxbixpflegehilfesenioren.Agencyreporter.problematic_stays` p
+    `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
   WHERE
     p.analysis_status = 'completed'
     AND (p.agency_id = @agency_id OR @agency_id IS NULL)
@@ -200,7 +202,7 @@ SELECT
   ), 1) AS percentage,
   AVG(CAST(JSON_EXTRACT_SCALAR(p.analysis_result, '$.confidence') AS INT64)) AS avg_confidence
 FROM
-  `gcpxbixpflegehilfesenioren.Agencyreporter.problematic_stays` p
+  `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
 WHERE
   p.analysis_status = 'completed'
   AND (p.agency_id = @agency_id OR @agency_id IS NULL)
@@ -227,7 +229,7 @@ SELECT
   COUNTIF(JSON_EXTRACT_SCALAR(p.analysis_result, '$.customer_satisfaction') = 'satisfied') AS satisfied_count,
   COUNTIF(JSON_EXTRACT_SCALAR(p.analysis_result, '$.customer_satisfaction') = 'not_satisfied') AS not_satisfied_count
 FROM
-  `gcpxbixpflegehilfesenioren.Agencyreporter.problematic_stays` p
+  `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
 WHERE
   p.analysis_status = 'completed'
   AND (p.agency_id = @agency_id OR @agency_id IS NULL)
