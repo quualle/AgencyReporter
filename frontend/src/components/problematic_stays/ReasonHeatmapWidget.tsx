@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ResponsiveContainer, 
   Tooltip, 
@@ -28,14 +28,8 @@ interface FormattedDataItem {
 
 const ReasonHeatmapWidget: React.FC<ReasonHeatmapWidgetProps> = ({ data, isLoading }) => {
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('all');
+  const [formattedData, setFormattedData] = useState<FormattedDataItem[]>([]);
   
-  // Wenn noch keine Daten geladen sind oder das Datenformat nicht stimmt
-  if (isLoading || !data || data.length === 0) {
-    return (
-      <div className="h-96 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse"></div>
-    );
-  }
-
   // Farben für die Heatmap, nach Häufigkeit
   const colors = [
     '#eaeff8', // sehr selten
@@ -51,9 +45,11 @@ const ReasonHeatmapWidget: React.FC<ReasonHeatmapWidgetProps> = ({ data, isLoadi
     'shortened_after_arrival': '#f59e0b'   // orange für Verkürzungen nach Anreise
   };
 
-  // Daten für Heatmap formatieren
-  const formatDataForHeatmap = (): FormattedDataItem[] => {
-    const formattedData: FormattedDataItem[] = [];
+  // Daten für Heatmap formatieren - WICHTIG: useEffect MUSS vor jeder bedingten Rückgabe stehen
+  useEffect(() => {
+    if (!data || data.length === 0) return;
+    
+    const formatted: FormattedDataItem[] = [];
     
     data.forEach(item => {
       // Filter anwenden, wenn gewählt
@@ -68,22 +64,31 @@ const ReasonHeatmapWidget: React.FC<ReasonHeatmapWidgetProps> = ({ data, isLoadi
       else if (item.percentage > 15) colorIndex = 2;
       else if (item.percentage > 5) colorIndex = 1;
       
-      formattedData.push({
-        name: item.reason,
-        agency: item.agency_name,
-        agency_id: item.agency_id,
-        value: item.count,
-        percentage: item.percentage,
-        event_type: item.event_type,
+      formatted.push({
+        name: item.reason || 'Unbekannt',  // Fallback für leeren reason
+        agency: item.agency_name || 'Unbekannt',
+        agency_id: item.agency_id || '',
+        value: item.count || 0,
+        percentage: item.percentage || 0,
+        event_type: item.event_type || '',
         color: colors[colorIndex]
       });
     });
     
     // Nach Wert sortieren, höchste zuerst
-    return formattedData.sort((a, b) => b.value - a.value);
-  };
+    setFormattedData(formatted.sort((a, b) => b.value - a.value));
+  }, [data, eventTypeFilter, colors]); // colors als Abhängigkeit hinzufügen
+  
+  // Debug-Log, um zu sehen, welche Daten wir haben
+  console.log("Heatmap-Daten:", data);
+  console.log("Formatierte Daten:", formattedData);
 
-  const heatmapData = formatDataForHeatmap();
+  // Wenn noch keine Daten geladen sind oder das Datenformat nicht stimmt
+  if (isLoading || !data || data.length === 0) {
+    return (
+      <div className="h-96 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse"></div>
+    );
+  }
   
   // Benutzerdefinierte Tooltip-Komponente
   const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
@@ -132,7 +137,7 @@ const ReasonHeatmapWidget: React.FC<ReasonHeatmapWidgetProps> = ({ data, isLoadi
           stroke="#fff"
           strokeWidth={2}
         />
-        {depth === 1 && (
+        {width > 30 && height > 30 && (
           <>
             <text
               x={x + width / 2}
@@ -158,6 +163,61 @@ const ReasonHeatmapWidget: React.FC<ReasonHeatmapWidgetProps> = ({ data, isLoadi
     );
   };
 
+  // Fallback, wenn keine Daten vorhanden sind
+  if (formattedData.length === 0) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+            Verteilung der Abbruchgründe
+          </h3>
+          <div>
+            <select 
+              value={eventTypeFilter}
+              onChange={(e) => setEventTypeFilter(e.target.value)}
+              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            >
+              <option value="all">Alle Typen</option>
+              <option value="cancelled_before_arrival">Vor Anreise</option>
+              <option value="shortened_after_arrival">Nach Anreise</option>
+            </select>
+          </div>
+        </div>
+        
+        <div className="flex-1 h-96 flex items-center justify-center bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <div className="text-center p-4">
+            <p className="text-gray-500 dark:text-gray-400">
+              Keine Daten zur Anzeige verfügbar. Bitte wählen Sie eine andere Filtereinstellung oder prüfen Sie, ob Daten geladen wurden.
+            </p>
+          </div>
+        </div>
+        
+        <div className="mt-4 flex flex-wrap justify-center gap-4">
+          <div className="flex items-center">
+            <div className="w-3 h-3 mr-1 bg-[#eaeff8] border border-gray-300"></div>
+            <span className="text-xs text-gray-600 dark:text-gray-400">Sehr selten (&lt;5%)</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 mr-1 bg-[#d0e0f7] border border-gray-300"></div>
+            <span className="text-xs text-gray-600 dark:text-gray-400">Selten (5-15%)</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 mr-1 bg-[#91B3FA] border border-gray-300"></div>
+            <span className="text-xs text-gray-600 dark:text-gray-400">Gelegentlich (15-30%)</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 mr-1 bg-[#6F96F4] border border-gray-300"></div>
+            <span className="text-xs text-gray-600 dark:text-gray-400">Häufig (30-50%)</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 mr-1 bg-[#4f46e5] border border-gray-300"></div>
+            <span className="text-xs text-gray-600 dark:text-gray-400">Sehr häufig (&gt;50%)</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex justify-between mb-4">
@@ -180,9 +240,10 @@ const ReasonHeatmapWidget: React.FC<ReasonHeatmapWidgetProps> = ({ data, isLoadi
       <div className="flex-1 h-96">
         <ResponsiveContainer width="100%" height="100%">
           <Treemap
-            data={heatmapData}
+            data={formattedData}
             dataKey="value"
             stroke="#fff"
+            fill="#8884d8"
             content={<CustomizedContent />}
           >
             <Tooltip content={<CustomTooltip />} />

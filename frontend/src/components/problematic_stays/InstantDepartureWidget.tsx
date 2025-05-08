@@ -249,7 +249,7 @@ const InstantDepartureWidget: React.FC<InstantDepartureWidgetProps> = ({ data, i
         {reasonData.length > 0 && (
           <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
             <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Häufigste Abbruchgründe
+              Häufigste Beendigungsgründe
             </h4>
             <div className="h-[320px] w-full">
               <ResponsiveContainer width="100%" height="100%">

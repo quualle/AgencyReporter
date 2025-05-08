@@ -15,6 +15,7 @@ from ..queries.problematic_stays.queries import (
     GET_PROBLEMATIC_STAYS_TREND_ANALYSIS
 )
 from datetime import datetime, timedelta
+import random  # Für Demo-Daten
 
 router = APIRouter()
 
@@ -688,4 +689,79 @@ async def get_problematic_stays_trend_analysis(
             "count": len(trend_data)
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays trend analysis: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays trend analysis: {str(e)}")
+
+@router.get("/cancellation-lead-time")
+async def get_problematic_stays_cancellation_lead_time(
+    agency_id: Optional[str] = QueryParam(None),
+    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Analyse der Vorlaufzeiten bei Abbrüchen vor der Anreise.
+    Liefert Informationen zur Verteilung der Vorlaufzeiten (Tage vor geplantem Einsatzbeginn)
+    und den häufigsten Abbruchgründen je Vorlaufzeitkategorie.
+    """
+    try:
+        # Setup date range based on time_period
+        today = datetime.now()
+        
+        if time_period == "last_month":
+            start_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+        elif time_period == "last_quarter":
+            start_date = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+        elif time_period == "last_year":
+            start_date = (today - timedelta(days=365)).strftime("%Y-%m-%d")
+        else:  # all_time
+            start_date = "2020-01-01"  # Earliest relevant data
+            
+        end_date = today.strftime("%Y-%m-%d")
+        
+        # Demo-Daten für die Entwicklung 
+        # Später durch echte Query ersetzen
+        
+        # Häufige Abbruchgründe
+        reasons = [
+            "Erkrankung Pflegekraft", 
+            "Stornierung durch Kunde", 
+            "Betreuungssituation geändert", 
+            "Kunde im Krankenhaus", 
+            "Pflegekraft kurzfristig verhindert",
+            "Veränderte Anforderungen",
+            "Andere Lösung gefunden",
+            "Finanzielle Gründe"
+        ]
+        
+        # Erstelle Demo-Daten für verschiedene Vorlaufzeiten
+        demo_data = []
+        for reason in reasons:
+            # Jeder Grund hat verschiedene Vorlaufzeiten
+            for _ in range(random.randint(5, 15)):
+                # Zufällige Vorlaufzeit zwischen 0 und 120 Tagen
+                days_before = random.choice([
+                    # Häufige Werte (0-7 Tage)
+                    0, 1, 2, 3, 4, 5, 6, 7,
+                    # Mittlere Werte (1-4 Wochen)
+                    10, 14, 21, 28,
+                    # Längere Vorlaufzeiten
+                    35, 42, 56, 70, 90, 120
+                ])
+                
+                # Anzahl der Fälle (gewichtet zugunsten von Gründen am Anfang der Liste)
+                count = random.randint(1, max(1, 20 - reasons.index(reason) * 2))
+                
+                demo_data.append({
+                    "reason": reason,
+                    "days_before_arrival": days_before,
+                    "count": count
+                })
+        
+        return {
+            "agency_id": agency_id,
+            "time_period": time_period,
+            "start_date": start_date,
+            "end_date": end_date,
+            "data": demo_data,
+            "count": len(demo_data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch cancellation lead time data: {str(e)}") 

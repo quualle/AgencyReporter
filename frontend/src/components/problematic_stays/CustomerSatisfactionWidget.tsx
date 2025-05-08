@@ -264,7 +264,7 @@ const CustomerSatisfactionWidget: React.FC<CustomerSatisfactionWidgetProps> = ({
         <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
           <div className="flex justify-between items-center mb-2">
             <h4 className="font-medium text-gray-700 dark:text-gray-300">
-              Häufigste Gründe
+              Häufigste Beendigungsgründe
             </h4>
             <div className="text-sm text-gray-600 dark:text-gray-400">
               {filterCaption}

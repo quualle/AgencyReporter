@@ -114,8 +114,8 @@ SELECT
   -- Event-Typ-Statistiken
   p.cancelled_before_arrival_count,
   p.shortened_after_arrival_count,
-  SAFE_DIVIDE(p.cancelled_before_arrival_count, p.total_problematic) * 100 AS cancelled_percentage,
-  SAFE_DIVIDE(p.shortened_after_arrival_count, p.total_problematic) * 100 AS shortened_percentage,
+  SAFE_DIVIDE(p.cancelled_before_arrival_count, tc.total_count) * 100 AS cancelled_percentage,
+  SAFE_DIVIDE(p.shortened_after_arrival_count, tc.total_count) * 100 AS shortened_percentage,
   
   -- Stay-Typ-Statistiken
   p.first_stay_count,
@@ -132,13 +132,13 @@ SELECT
   -- Ersatz-Statistiken
   p.with_replacement_count,
   p.with_follow_up_count,
-  SAFE_DIVIDE(p.with_replacement_count, p.cancelled_before_arrival_count) * 100 AS replacement_percentage,
+  SAFE_DIVIDE(p.with_replacement_count, tc.total_count) * 100 AS replacement_percentage,
   SAFE_DIVIDE(p.with_follow_up_count, p.shortened_after_arrival_count) * 100 AS follow_up_percentage,
   
   -- Sofortige Abreise
   p.instant_departure_count,
   p.avg_instant_departure_days,
-  SAFE_DIVIDE(p.instant_departure_count, p.shortened_after_arrival_count) * 100 AS instant_departure_percentage,
+  SAFE_DIVIDE(p.instant_departure_count, tc.total_count) * 100 AS instant_departure_percentage,
   
   -- Sofortige Abreise nach Tagen
   p.instant_departure_day_1,
@@ -175,8 +175,8 @@ SELECT
   p.satisfied_count,
   p.not_satisfied_count,
   p.satisfaction_na_count,
-  SAFE_DIVIDE(p.satisfied_count, p.total_problematic) * 100 AS satisfied_percentage,
-  SAFE_DIVIDE(p.not_satisfied_count, p.total_problematic) * 100 AS not_satisfied_percentage,
+  SAFE_DIVIDE(p.satisfied_count, tc.total_count) * 100 AS satisfied_percentage,
+  SAFE_DIVIDE(p.not_satisfied_count, tc.total_count) * 100 AS not_satisfied_percentage,
   
   -- Confidence-Scores
   p.avg_reason_confidence,

@@ -199,6 +199,70 @@ ORDER BY
   agency_name, satisfaction
 ```
 
+```sql
+-- Übersichtsanalyse der problematischen Pflegeeinsätze mit Prozentsätzen bezogen auf Gesamteinsätze
+WITH total_carestays AS (
+  -- Gesamtanzahl aller Pflegeeinsätze pro Agentur
+  SELECT
+    c.agency_id,
+    COUNT(*) AS total_count
+  FROM
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+  JOIN
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+  WHERE
+    (c.agency_id = @agency_id OR @agency_id IS NULL)
+    AND SUBSTR(cs.created_at, 1, 10) BETWEEN @start_date AND @end_date
+  GROUP BY
+    c.agency_id
+),
+problematic_stats AS (
+  -- Statistiken zu problematischen Einsätzen
+  SELECT
+    p.agency_id,
+    p.agency_name,
+    COUNT(*) AS total_problematic,
+    COUNTIF(p.event_type = 'cancelled_before_arrival') AS cancelled_before_arrival_count,
+    COUNTIF(p.event_type = 'shortened_after_arrival') AS shortened_after_arrival_count,
+    COUNTIF(p.has_replacement = TRUE) AS with_replacement_count,
+    COUNTIF(p.instant_departure_after IS NOT NULL) AS instant_departure_count,
+    COUNTIF(JSON_EXTRACT_SCALAR(p.analysis_result, '$.customer_satisfaction') = 'satisfied') AS satisfied_count
+  FROM
+    `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
+  WHERE
+    p.analysis_status = 'analyzed'
+    AND (p.agency_id = @agency_id OR @agency_id IS NULL)
+    AND p.event_date BETWEEN @start_date AND @end_date
+  GROUP BY
+    p.agency_id, p.agency_name
+)
+
+SELECT
+  p.agency_id,
+  p.agency_name,
+  p.total_problematic,
+  tc.total_count AS total_carestays,
+  SAFE_DIVIDE(p.total_problematic, tc.total_count) * 100 AS problematic_percentage,
+  
+  -- Prozentsätze als Anteil an Gesamtzahl der Einsätze
+  p.cancelled_before_arrival_count,
+  p.shortened_after_arrival_count,
+  SAFE_DIVIDE(p.cancelled_before_arrival_count, tc.total_count) * 100 AS cancelled_percentage,
+  SAFE_DIVIDE(p.shortened_after_arrival_count, tc.total_count) * 100 AS shortened_percentage,
+  p.with_replacement_count,
+  SAFE_DIVIDE(p.with_replacement_count, tc.total_count) * 100 AS replacement_percentage,
+  p.instant_departure_count,
+  SAFE_DIVIDE(p.instant_departure_count, tc.total_count) * 100 AS instant_departure_percentage,
+  p.satisfied_count,
+  SAFE_DIVIDE(p.satisfied_count, tc.total_count) * 100 AS satisfied_percentage
+FROM
+  problematic_stats p
+LEFT JOIN
+  total_carestays tc ON p.agency_id = tc.agency_id
+ORDER BY
+  p.total_problematic DESC
+```
+
 ## Support
 
 Bei Problemen oder Fragen wende dich bitte an:

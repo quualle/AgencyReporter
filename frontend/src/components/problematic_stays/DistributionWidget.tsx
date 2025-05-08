@@ -18,6 +18,7 @@ const DistributionWidget: React.FC<DistributionWidgetProps> = ({ data, isLoading
   }
 
   // Extrahiere relevante Daten für das Diagramm
+  const totalCareStays = data[0]?.total_carestays || 0;
   const chartData = [
     {
       name: 'Abbrüche vor Anreise',
@@ -34,30 +35,32 @@ const DistributionWidget: React.FC<DistributionWidgetProps> = ({ data, isLoading
   // Benutzerdefinierte Tooltip-Komponente
   const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
     if (active && payload && payload.length) {
-      const total = payload.reduce((sum, entry) => sum + (entry.value as number), 0);
-      
       return (
         <div className="bg-white dark:bg-gray-800 p-3 border border-gray-200 dark:border-gray-700 rounded shadow-lg">
           <p className="font-medium text-gray-900 dark:text-white">{label}</p>
           <div className="mt-2">
-            {payload.map((entry, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div 
-                    className="w-3 h-3 mr-2" 
-                    style={{ backgroundColor: entry.color }}
-                  ></div>
-                  <span className="text-gray-700 dark:text-gray-300">{entry.name}: </span>
+            {payload.map((entry, index) => {
+              const value = entry.value as number;
+              const percentOfTotal = totalCareStays > 0 ? (value / totalCareStays * 100) : 0;
+              return (
+                <div key={index} className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div 
+                      className="w-3 h-3 mr-2" 
+                      style={{ backgroundColor: entry.color }}
+                    ></div>
+                    <span className="text-gray-700 dark:text-gray-300">{entry.name}: </span>
+                  </div>
+                  <span className="font-medium ml-2 text-gray-900 dark:text-white">
+                    {value} ({percentOfTotal.toFixed(1)}%)
+                  </span>
                 </div>
-                <span className="font-medium ml-2 text-gray-900 dark:text-white">
-                  {entry.value} ({((entry.value as number) / total * 100).toFixed(1)}%)
-                </span>
-              </div>
-            ))}
+              );
+            })}
             <div className="mt-1 pt-1 border-t border-gray-200 dark:border-gray-700">
               <div className="flex justify-between">
                 <span className="text-gray-700 dark:text-gray-300">Gesamt:</span>
-                <span className="font-medium text-gray-900 dark:text-white">{total}</span>
+                <span className="font-medium text-gray-900 dark:text-white">{totalCareStays}</span>
               </div>
             </div>
           </div>

@@ -125,7 +125,7 @@ const OverviewWidget: React.FC<OverviewWidgetProps> = ({ data, isLoading }) => {
         title="Abbrüche vor Anreise" 
         value={stats.cancelled_percentage || 0}
         comparisonValue={0} // Hier den Vergleichswert einfügen
-        description={`${stats.cancelled_before_arrival_count || 0} Einsätze`}
+        description={`${stats.cancelled_before_arrival_count || 0} Einsätze (% aller Einsätze)`}
       />
       
       {/* Vorzeitige Beendigungen */}
@@ -133,7 +133,7 @@ const OverviewWidget: React.FC<OverviewWidgetProps> = ({ data, isLoading }) => {
         title="Vorzeitige Beendigungen" 
         value={stats.shortened_percentage || 0}
         comparisonValue={0} // Hier den Vergleichswert einfügen
-        description={`${stats.shortened_after_arrival_count || 0} Einsätze`}
+        description={`${stats.shortened_after_arrival_count || 0} Einsätze (% aller Einsätze)`}
       />
       
       {/* Sofortige Abreisen */}
@@ -141,7 +141,7 @@ const OverviewWidget: React.FC<OverviewWidgetProps> = ({ data, isLoading }) => {
         title="Sofortige Abreisen (<10 Tage)" 
         value={stats.instant_departure_percentage || 0}
         comparisonValue={0} // Hier den Vergleichswert einfügen
-        description={`${stats.instant_departure_count || 0} Einsätze`}
+        description={`${stats.instant_departure_count || 0} Einsätze (% aller Einsätze)`}
       />
       
       {/* Vorlaufzeit bei Abbrüchen */}
@@ -164,14 +164,14 @@ const OverviewWidget: React.FC<OverviewWidgetProps> = ({ data, isLoading }) => {
       <KpiCard 
         title="Ersatzbereitstellung" 
         value={stats.replacement_percentage || 0}
-        description={`Bei ${stats.with_replacement_count || 0} Abbrüchen`}
+        description={`Bei ${stats.with_replacement_count || 0} Abbrüchen (% aller Einsätze)`}
       />
       
       {/* Kundenzufriedenheit */}
       <KpiCard 
         title="Kundenzufriedenheit" 
         value={stats.satisfied_percentage || 0}
-        description={`${stats.satisfied_count || 0} zufriedene Kunden`}
+        description={`${stats.satisfied_count || 0} zufriedene Kunden (% aller Einsätze)`}
       />
     </div>
   );
