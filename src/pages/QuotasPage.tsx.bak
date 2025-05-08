@@ -1,0 +1,1228 @@
+import React, { useEffect, useState } from 'react';
+import { useAppStore } from '../store/appStore';
+import apiService from '../services/api';
+import Loading from '../components/common/Loading';
+import ErrorMessage from '../components/common/ErrorMessage';
+import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, Cell, PieChart, Pie, LineChart, Line, ComposedChart, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import { FunnelChart, Funnel, LabelList } from 'recharts';
+import ExportButton from '../components/common/ExportButton';
+
+// Define a type for the scatter data points
+interface ScatterDataPoint {
+  x: number;
+  y: number;
+  z: number;
+  name: string;
+  agency_id: string;
+  isSelected: boolean;
+  isAverage?: boolean;
+}
+
+// Interface for reason data
+interface ReasonData {
+  [key: string]: number;
+}
+
+// Interface for formatted reason data for charts
+interface FormattedReasonData {
+  name: string;
+  value: number;
+  percentage: string;
+  fill: string;
+}
+
+// Define type for agency comparison data
+interface AgencyComparisonItem {
+  agency_id: string;
+  agency_name: string;
+  reservation_rate: number;
+  fulfillment_rate: number;
+  cancellation_rate: number;
+  start_rate: number;
+  completion_rate: number;
+  early_end_rate: number;
+  total_postings: number;
+  is_selected?: boolean;
+}
+
+const QuotasPage: React.FC = () => {
+  const { selectedAgency, timePeriod } = useAppStore();
+  
+  const [allQuotasData, setAllQuotasData] = useState<any | null>(null);
+  const [cancellationRateData, setCancellationRateData] = useState<any>(null);
+  const [timingData, setTimingData] = useState<any>(null);
+  const [avgCancellationStats, setAvgCancellationStats] = useState<any>(null);
+  const [cancellationReasons, setCancellationReasons] = useState<any>(null);
+  const [earlyEndReasons, setEarlyEndReasons] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showQuotaDetails, setShowQuotaDetails] = useState<boolean>(false);
+  const [historicalData, setHistoricalData] = useState<any>(null);
+  const [periodComparisonData, setPeriodComparisonData] = useState<any>(null);
+  const [showTrendAnalysis, setShowTrendAnalysis] = useState<boolean>(false);
+  const [showAgencyComparison, setShowAgencyComparison] = useState<boolean>(false);
+  const [comparisonAgencies, setComparisonAgencies] = useState<AgencyComparisonItem[]>([]);
+  const [selectedComparisonAgencies, setSelectedComparisonAgencies] = useState<string[]>([]);
+  
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!selectedAgency) return;
+      
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const [
+          quotasData, 
+          cancellationRate, 
+          arrivalTiming, 
+          avgCancellationRate,
+          cancellationReasonsData,
+          earlyEndReasonsData
+        ] = await Promise.all([
+          apiService.getAgencyQuotas(selectedAgency.agency_id, timePeriod),
+          apiService.getCancellationBeforeArrivalRate(selectedAgency.agency_id, timePeriod),
+          apiService.getArrivalToCancellationStats(selectedAgency.agency_id, timePeriod),
+          apiService.getOverallCancellationBeforeArrivalStats(timePeriod),
+          apiService.getAgencyCancellationReasons(selectedAgency.agency_id, timePeriod),
+          apiService.getAgencyEarlyEndReasons(selectedAgency.agency_id, timePeriod)
+        ]);
+
+        console.log("API Response - Quotas Data:", quotasData);
+
+        setAllQuotasData(quotasData);
+        setCancellationRateData(cancellationRate);
+        setTimingData(arrivalTiming);
+        setAvgCancellationStats(avgCancellationRate);
+        setCancellationReasons(cancellationReasonsData);
+        setEarlyEndReasons(earlyEndReasonsData);
+
+        // Mock historical and period comparison data
+        // In a real implementation, these would be API calls
+        const mockHistoricalData = {
+          periods: ['Q1', 'Q2', 'Q3', 'Q4'],
+          metrics: {
+            reservation_rate: [0.55, 0.58, 0.62, 0.65],
+            fulfillment_rate: [0.72, 0.70, 0.75, 0.78],
+            cancellation_rate: [0.15, 0.18, 0.12, 0.10],
+            start_rate: [0.85, 0.82, 0.88, 0.90],
+            completion_rate: [0.78, 0.75, 0.82, 0.85],
+            early_end_rate: [0.22, 0.25, 0.18, 0.15]
+          }
+        };
+        
+        const mockPeriodComparisonData = {
+          current_period: 'Q4',
+          previous_period: 'Q3',
+          previous_year: 'Vorjahr Q4',
+          metrics: {
+            reservation_rate: { current: 0.65, previous_period: 0.62, previous_year: 0.52 },
+            fulfillment_rate: { current: 0.78, previous_period: 0.75, previous_year: 0.68 },
+            cancellation_rate: { current: 0.10, previous_period: 0.12, previous_year: 0.20 },
+            start_rate: { current: 0.90, previous_period: 0.88, previous_year: 80 },
+            completion_rate: { current: 0.85, previous_period: 0.82, previous_year: 72 },
+            early_end_rate: { current: 0.15, previous_period: 0.18, previous_year: 28 }
+          }
+        };
+        
+        setHistoricalData(mockHistoricalData);
+        setPeriodComparisonData(mockPeriodComparisonData);
+
+        // Mock data for agency comparison
+        const mockComparisonAgencies: AgencyComparisonItem[] = [
+          {
+            agency_id: 'agency1',
+            agency_name: 'Agentur Alpha',
+            reservation_rate: 0.68,
+            fulfillment_rate: 0.82,
+            cancellation_rate: 0.09,
+            start_rate: 0.91,
+            completion_rate: 0.88,
+            early_end_rate: 0.12,
+            total_postings: 120,
+            is_selected: true
+          },
+          {
+            agency_id: 'agency2',
+            agency_name: 'Agentur Beta',
+            reservation_rate: 0.58,
+            fulfillment_rate: 0.75,
+            cancellation_rate: 0.15,
+            start_rate: 0.85,
+            completion_rate: 0.80,
+            early_end_rate: 0.20,
+            total_postings: 95
+          },
+          {
+            agency_id: 'agency3',
+            agency_name: 'Agentur Gamma',
+            reservation_rate: 0.72,
+            fulfillment_rate: 0.88,
+            cancellation_rate: 0.08,
+            start_rate: 0.92,
+            completion_rate: 0.90,
+            early_end_rate: 0.10,
+            total_postings: 110
+          },
+          {
+            agency_id: 'agency4',
+            agency_name: 'Agentur Delta',
+            reservation_rate: 0.62,
+            fulfillment_rate: 0.78,
+            cancellation_rate: 0.12,
+            start_rate: 0.88,
+            completion_rate: 0.82,
+            early_end_rate: 0.18,
+            total_postings: 105
+          },
+          {
+            agency_id: 'agency5',
+            agency_name: 'Agentur Epsilon',
+            reservation_rate: 0.55,
+            fulfillment_rate: 0.68,
+            cancellation_rate: 0.18,
+            start_rate: 0.82,
+            completion_rate: 0.75,
+            early_end_rate: 0.25,
+            total_postings: 85
+          },
+        ];
+        
+        setComparisonAgencies(mockComparisonAgencies);
+        setSelectedComparisonAgencies(['agency2', 'agency3']); // Default selection
+
+      } catch (err) {
+        console.error('Error fetching Quotas page data:', err);
+        setError('Fehler beim Laden der Quotendaten.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [selectedAgency, timePeriod]);
+  
+  if (isLoading) {
+    return <Loading message="Laden der KPI-Daten..." />;
+  }
+  
+  if (error) {
+    return <ErrorMessage message={error} retry={() => setIsLoading(true)} />;
+  }
+  
+  if (!selectedAgency || !allQuotasData) {
+    return (
+      <div className="text-center p-8">
+        <h2 className="text-xl font-semibold mb-4">Keine Daten verfügbar</h2>
+        <p className="text-gray-600 dark:text-gray-300">
+          Bitte wählen Sie eine Agentur aus oder versuchen Sie es später erneut.
+        </p>
+      </div>
+    );
+  }
+  
+  // Prepare data for scatter plot
+  const scatterData: ScatterDataPoint[] = [];
+  
+  const selectedAgencyScatterData = allQuotasData?.selected_agency || {};
+  
+  // Add proper data to scatterData if available
+  if (allQuotasData?.all_agencies) {
+    // Add other agencies data
+    allQuotasData.all_agencies.forEach((agency: any) => {
+      if (agency.agency_id !== selectedAgency.agency_id) {
+        scatterData.push({
+          x: (agency.reservation_rate || 0) * 100,
+          y: (agency.fulfillment_rate || 0) * 100,
+          z: agency.reservation_count || 1,
+          name: agency.agency_name,
+          agency_id: agency.agency_id,
+          isSelected: false
+        });
+      }
+    });
+    
+    // Add selected agency
+    if (selectedAgencyScatterData && selectedAgency) {
+      scatterData.push({
+        x: (selectedAgencyScatterData.reservation_rate || 0) * 100,
+        y: (selectedAgencyScatterData.fulfillment_rate || 0) * 100,
+        z: selectedAgencyScatterData.reservation_count || 1,
+        name: selectedAgency.agency_name,
+        agency_id: selectedAgency.agency_id,
+        isSelected: true
+      });
+    }
+    
+    // Add industry average
+    if (allQuotasData.industry_average) {
+      scatterData.push({
+        x: (allQuotasData.industry_average.reservation_rate || 0) * 100,
+        y: (allQuotasData.industry_average.fulfillment_rate || 0) * 100,
+        z: allQuotasData.industry_average.avg_reservation_count || 1,
+        name: "Branchendurchschnitt",
+        agency_id: "average",
+        isSelected: false,
+        isAverage: true
+      });
+    }
+  }
+  
+  // Helper function to transform reasons data for charts
+  const prepareReasonsData = (reasonsData: ReasonData | null, total: number): FormattedReasonData[] => {
+    if (!reasonsData) return [];
+    
+    const colors = ['#3b82f6', '#ef4444', '#f97316', '#eab308', '#22c55e', '#8b5cf6', '#ec4899'];
+    
+    return Object.entries(reasonsData).map(([reason, count], index) => ({
+      name: reason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      value: count,
+      percentage: `${((count / total) * 100).toFixed(1)}%`,
+      fill: colors[index % colors.length]
+    }));
+  };
+  
+  // Format numbers for display
+  const formatPercentage = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined) return 'N/A';
+    const numValue = typeof value === 'string' ? parseFloat(value.replace('%', '')) : value;
+    if (isNaN(numValue)) return 'N/A';
+    if (numValue < 0.05) return '< 0,1%';
+    return `${numValue.toFixed(1)}%`;
+  };
+  
+  const formatHours = (value: string | number | null | undefined) => {
+    if (value === null || value === undefined) return 'N/A';
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return 'N/A';
+    if (numValue >= 24) {
+      return `${(numValue / 24).toFixed(1)} Tage`;
+    }
+    return `${numValue.toFixed(1)} Std.`;
+  };
+
+  // Prepare data for the cancellation bucket chart
+  const getCancellationBucketChartData = (): { name: string; count: number; ratio: string; color: string; percentage: number; label: string; avgPercentage?: number }[] => {
+    const buckets = cancellationRateData?.cancellation_buckets?.gesamt;
+    const avgBuckets = avgCancellationStats?.avg_cancellation_buckets;
+    const proposal_count = cancellationRateData?.proposal_count || 1;
+    const avg_proposal_count = avgCancellationStats?.avg_proposal_count || 1;
+    if (!buckets || proposal_count === 0) return [];
+
+    const data = [
+      { name: '< 3 Tage', count: buckets.lt_3_days?.count ?? 0, ratio: buckets.lt_3_days?.ratio ?? '0.0%', color: '#ef4444', avgCount: avgBuckets?.lt_3_days?.count },
+      { name: '3-7 Tage', count: buckets.btw_3_7_days?.count ?? 0, ratio: buckets.btw_3_7_days?.ratio ?? '0.0%', color: '#f97316', avgCount: avgBuckets?.btw_3_7_days?.count },
+      { name: '8-14 Tage', count: buckets.btw_8_14_days?.count ?? 0, ratio: buckets.btw_8_14_days?.ratio ?? '0.0%', color: '#eab308', avgCount: avgBuckets?.btw_8_14_days?.count },
+      { name: '15-30 Tage', count: buckets.btw_15_30_days?.count ?? 0, ratio: buckets.btw_15_30_days?.ratio ?? '0.0%', color: '#22c55e', avgCount: avgBuckets?.btw_15_30_days?.count }
+    ];
+    
+     return data.map(item => ({
+       ...item,
+       percentage: proposal_count > 0 ? ((item.count || 0) / proposal_count) * 100 : 0,
+       avgPercentage: avg_proposal_count > 0 ? ((item.avgCount || 0) / avg_proposal_count) * 100 : 0,
+       label: `${item.count} / ${proposal_count}`
+     }));
+  };
+
+  // Prepare funnel data with better error handling
+  const prepareFunnelData = () => {
+    // If no API data available, use sample data for development/testing
+    if (!allQuotasData?.selected_agency) {
+      // Sample data for development/testing
+      return [
+        { name: 'Ausgeschriebene Stellen', value: 100, fill: '#4F86C6', fullValue: 100, percentage: '100%' },
+        { name: 'Reservierte Stellen', value: 65, fill: '#6A9ADB', fullValue: 100, percentage: '65.0%' },
+        { name: 'Personalvorschläge', value: 45, fill: '#65B2A9', fullValue: 100, percentage: '45.0%' },
+        { name: 'Angetretene Einsätze', value: 35, fill: '#4CAF50', fullValue: 100, percentage: '35.0%' },
+        { name: 'Abgeschlossene Einsätze', value: 30, fill: '#2E7D32', fullValue: 100, percentage: '30.0%' }
+      ];
+    }
+    
+    console.log("Preparing funnel data with:", allQuotasData.selected_agency);
+    
+    const sa = allQuotasData.selected_agency;
+    
+    // Add total_postings if not available in the data
+    if (sa.total_postings === undefined) {
+      // Estimate total postings based on reservations and reservation rate
+      // or use a default value
+      if (sa.total_reservations && sa.reservation_rate) {
+        sa.total_postings = Math.round(sa.total_reservations / sa.reservation_rate);
+      } else {
+        sa.total_postings = 100; // Default fallback
+      }
+    }
+    
+    // Check if we have the basic quota data
+    const total_postings = sa.total_postings || 100; 
+    
+    // Use optional chaining and fallbacks for all calculations
+    const reservations = Math.round(total_postings * (sa.reservation_rate || 0));
+    
+    // Compute proposal rate if not directly available
+    const proposal_rate = sa.proposal_rate || 
+                        (sa.fulfillment_rate ? sa.fulfillment_rate / (sa.reservation_rate || 1) : 0.6);
+    const proposals = Math.round(reservations * proposal_rate);
+    
+    const started = Math.round(proposals * (sa.start_rate || 0));
+    const completed = Math.round(started * (sa.completion_rate || 0));
+    
+    return [
+      { 
+        name: 'Ausgeschriebene Stellen', 
+        value: total_postings,
+        fill: '#4F86C6',
+        fullValue: total_postings,
+        percentage: '100%'
+      },
+      { 
+        name: 'Reservierte Stellen', 
+        value: reservations,
+        fill: '#6A9ADB',
+        fullValue: total_postings,
+        percentage: formatPercentage((sa.reservation_rate || 0) * 100)
+      },
+      { 
+        name: 'Personalvorschläge', 
+        value: proposals,
+        fill: '#65B2A9',
+        fullValue: total_postings,
+        percentage: formatPercentage(proposal_rate * (sa.reservation_rate || 0) * 100)
+      },
+      { 
+        name: 'Angetretene Einsätze', 
+        value: started,
+        fill: '#4CAF50',
+        fullValue: total_postings,
+        percentage: formatPercentage((sa.start_rate || 0) * proposal_rate * (sa.reservation_rate || 0) * 100)
+      },
+      { 
+        name: 'Abgeschlossene Einsätze', 
+        value: completed,
+        fill: '#2E7D32',
+        fullValue: total_postings,
+        percentage: formatPercentage((sa.completion_rate || 0) * (sa.start_rate || 0) * proposal_rate * (sa.reservation_rate || 0) * 100)
+      }
+    ];
+  };
+
+  // Prepare sankey-like visualization for dropoffs with better error handling
+  const prepareDropoffData = () => {
+    // If no API data available, use sample data for development/testing
+    if (!allQuotasData?.selected_agency) {
+      return [
+        { stage: 'Reserviert', value: 65, fill: '#4F86C6', percentage: '65.0%' },
+        { stage: 'Reserviert und Vorschlag', value: 45, fill: '#65B2A9', percentage: '69.2%' },
+        { stage: 'Anreise erfolgreich', value: 35, fill: '#4CAF50', percentage: '77.8%' },
+        { stage: 'Einsatz vollständig durchgezogen', value: 30, fill: '#2E7D32', percentage: '85.7%' },
+      ];
+    }
+    
+    const sa = allQuotasData.selected_agency;
+    
+    // Add total_postings if not available in the data
+    if (sa.total_postings === undefined) {
+      // Estimate total postings based on reservations and reservation rate
+      // or use a default value
+      if (sa.total_reservations && sa.reservation_rate) {
+        sa.total_postings = Math.round(sa.total_reservations / sa.reservation_rate);
+      } else {
+        sa.total_postings = 100; // Default fallback
+      }
+    }
+    
+    const total_postings = sa.total_postings || 100;
+    const reservations = Math.round(total_postings * (sa.reservation_rate || 0));
+    const not_reserved = total_postings - reservations;
+    
+    // Compute proposal rate if not directly available
+    const proposal_rate = sa.proposal_rate || 
+                        (sa.fulfillment_rate ? sa.fulfillment_rate / (sa.reservation_rate || 1) : 0.6);
+    const proposals = Math.round(reservations * proposal_rate);
+    const no_proposal = reservations - proposals;
+    
+    const started = Math.round(proposals * (sa.start_rate || 0));
+    const cancelled_before_arrival = proposals - started;
+    
+    const completed = Math.round(started * (sa.completion_rate || 0));
+    const early_ended = started - completed;
+    
+    // Ensure we don't have negative values
+    return [
+      { 
+        stage: 'Reserviert', 
+        value: Math.max(0, reservations), 
+        fill: '#4F86C6', 
+        percentage: formatPercentage(reservations / total_postings * 100) 
+      },
+      { 
+        stage: 'Reserviert und Vorschlag', 
+        value: Math.max(0, proposals), 
+        fill: '#65B2A9', 
+        percentage: formatPercentage(proposals / Math.max(1, reservations) * 100) 
+      },
+      { 
+        stage: 'Anreise erfolgreich', 
+        value: Math.max(0, started), 
+        fill: '#4CAF50', 
+        percentage: formatPercentage(started / Math.max(1, proposals) * 100) 
+      },
+      { 
+        stage: 'Einsatz vollständig durchgezogen', 
+        value: Math.max(0, completed), 
+        fill: '#2E7D32', 
+        percentage: formatPercentage(completed / Math.max(1, started) * 100) 
+      }
+    ];
+  };
+
+  // Prepare data for historical trend chart
+  const prepareHistoricalTrendData = () => {
+    if (!historicalData?.periods || !historicalData?.metrics) {
+      // Return sample data if API data not available
+      return [
+        { period: 'Q1', reservation_rate: 55, fulfillment_rate: 72, cancellation_rate: 15 },
+        { period: 'Q2', reservation_rate: 58, fulfillment_rate: 70, cancellation_rate: 18 },
+        { period: 'Q3', reservation_rate: 62, fulfillment_rate: 75, cancellation_rate: 12 },
+        { period: 'Q4', reservation_rate: 65, fulfillment_rate: 78, cancellation_rate: 10 }
+      ];
+    }
+    
+    return historicalData.periods.map((period: string, index: number) => ({
+      period,
+      reservation_rate: Math.round(historicalData.metrics.reservation_rate[index] * 100),
+      fulfillment_rate: Math.round(historicalData.metrics.fulfillment_rate[index] * 100),
+      cancellation_rate: Math.round(historicalData.metrics.cancellation_rate[index] * 100),
+      start_rate: Math.round(historicalData.metrics.start_rate[index] * 100),
+      completion_rate: Math.round(historicalData.metrics.completion_rate[index] * 100),
+      early_end_rate: Math.round(historicalData.metrics.early_end_rate[index] * 100)
+    }));
+  };
+  
+  // Prepare period comparison data
+  const preparePeriodComparisonData = () => {
+    if (!periodComparisonData?.metrics) {
+      // Return sample data if API data not available
+      return [
+        { name: 'Reservierungsrate', current: 65, previous_period: 62, previous_year: 52, is_better: true },
+        { name: 'Erfüllungsrate', current: 78, previous_period: 75, previous_year: 68, is_better: true },
+        { name: 'Abbruchrate', current: 10, previous_period: 12, previous_year: 20, is_better: true },
+        { name: 'Antrittsrate', current: 90, previous_period: 88, previous_year: 80, is_better: true },
+        { name: 'Abschlussrate', current: 85, previous_period: 82, previous_year: 72, is_better: true },
+        { name: 'Vorzeitige Beendigungsrate', current: 15, previous_period: 18, previous_year: 28, is_better: true }
+      ];
+    }
+    
+    const metrics = periodComparisonData.metrics;
+    
+    return [
+      { 
+        name: 'Reservierungsrate', 
+        current: Math.round(metrics.reservation_rate.current * 100), 
+        previous_period: Math.round(metrics.reservation_rate.previous_period * 100), 
+        previous_year: Math.round(metrics.reservation_rate.previous_year * 100),
+        is_better: metrics.reservation_rate.current > metrics.reservation_rate.previous_period
+      },
+      { 
+        name: 'Erfüllungsrate', 
+        current: Math.round(metrics.fulfillment_rate.current * 100), 
+        previous_period: Math.round(metrics.fulfillment_rate.previous_period * 100), 
+        previous_year: Math.round(metrics.fulfillment_rate.previous_year * 100),
+        is_better: metrics.fulfillment_rate.current > metrics.fulfillment_rate.previous_period
+      },
+      { 
+        name: 'Abbruchrate', 
+        current: Math.round(metrics.cancellation_rate.current * 100), 
+        previous_period: Math.round(metrics.cancellation_rate.previous_period * 100), 
+        previous_year: Math.round(metrics.cancellation_rate.previous_year * 100),
+        is_better: metrics.cancellation_rate.current < metrics.cancellation_rate.previous_period
+      },
+      { 
+        name: 'Antrittsrate', 
+        current: Math.round(metrics.start_rate.current * 100), 
+        previous_period: Math.round(metrics.start_rate.previous_period * 100), 
+        previous_year: Math.round(metrics.start_rate.previous_year * 100),
+        is_better: metrics.start_rate.current > metrics.start_rate.previous_period
+      },
+      { 
+        name: 'Abschlussrate', 
+        current: Math.round(metrics.completion_rate.current * 100), 
+        previous_period: Math.round(metrics.completion_rate.previous_period * 100), 
+        previous_year: Math.round(metrics.completion_rate.previous_year * 100),
+        is_better: metrics.completion_rate.current > metrics.completion_rate.previous_period
+      },
+      { 
+        name: 'Vorzeitige Beendigungsrate', 
+        current: Math.round(metrics.early_end_rate.current * 100), 
+        previous_period: Math.round(metrics.early_end_rate.previous_period * 100), 
+        previous_year: Math.round(metrics.early_end_rate.previous_year * 100),
+        is_better: metrics.early_end_rate.current < metrics.early_end_rate.previous_period
+      }
+    ];
+  };
+
+  // Handle agency selection for comparison
+  const handleAgencyComparisonToggle = (agencyId: string) => {
+    setSelectedComparisonAgencies(prev => {
+      if (prev.includes(agencyId)) {
+        return prev.filter(id => id !== agencyId);
+      } else {
+        // Limit to maximum 4 agencies for comparison
+        if (prev.length >= 4) return prev;
+        return [...prev, agencyId];
+      }
+    });
+  };
+  
+  // Prepare radar chart data for agency comparison
+  const prepareRadarChartData = () => {
+    // Return early if no data
+    if (!comparisonAgencies.length || !selectedComparisonAgencies.length) {
+      return [];
+    }
+    
+    // Get current agency
+    const currentAgency = comparisonAgencies.find(a => a.is_selected);
+    if (!currentAgency) return [];
+    
+    // Get comparison agencies
+    const compareAgencies = comparisonAgencies.filter(
+      a => selectedComparisonAgencies.includes(a.agency_id)
+    );
+    
+    // Format: [{ metric: 'name', currentAgency: value, agency1: value, agency2: value, ... }]
+    return [
+      {
+        metric: 'Reservierungsrate',
+        [currentAgency.agency_name]: Math.round(currentAgency.reservation_rate * 100),
+        ...compareAgencies.reduce((acc, agency) => ({
+          ...acc,
+          [agency.agency_name]: Math.round(agency.reservation_rate * 100)
+        }), {})
+      },
+      {
+        metric: 'Erfüllungsrate',
+        [currentAgency.agency_name]: Math.round(currentAgency.fulfillment_rate * 100),
+        ...compareAgencies.reduce((acc, agency) => ({
+          ...acc,
+          [agency.agency_name]: Math.round(agency.fulfillment_rate * 100)
+        }), {})
+      },
+      {
+        metric: 'Abbruchrate',
+        [currentAgency.agency_name]: Math.round(currentAgency.cancellation_rate * 100),
+        ...compareAgencies.reduce((acc, agency) => ({
+          ...acc,
+          [agency.agency_name]: Math.round(agency.cancellation_rate * 100)
+        }), {})
+      },
+      {
+        metric: 'Antrittsrate',
+        [currentAgency.agency_name]: Math.round(currentAgency.start_rate * 100),
+        ...compareAgencies.reduce((acc, agency) => ({
+          ...acc,
+          [agency.agency_name]: Math.round(agency.start_rate * 100)
+        }), {})
+      },
+      {
+        metric: 'Abschlussrate',
+        [currentAgency.agency_name]: Math.round(currentAgency.completion_rate * 100),
+        ...compareAgencies.reduce((acc, agency) => ({
+          ...acc,
+          [agency.agency_name]: Math.round(agency.completion_rate * 100)
+        }), {})
+      }
+    ];
+  };
+
+  // Prepare detailed bar chart comparison data
+  const prepareBarComparisonData = () => {
+    if (!comparisonAgencies.length || !selectedComparisonAgencies.length) {
+      return [];
+    }
+    
+    // Get current agency
+    const currentAgency = comparisonAgencies.find(a => a.is_selected);
+    if (!currentAgency) return [];
+    
+    // Get comparison agencies
+    const compareAgencies = comparisonAgencies.filter(
+      a => selectedComparisonAgencies.includes(a.agency_id)
+    );
+    
+    // Get all agencies for comparison
+    const allCompareAgencies = [currentAgency, ...compareAgencies];
+    
+    // Generate comparison data for each metric
+    const metrics = [
+      { key: 'reservation_rate', label: 'Reservierungsrate', better: 'higher' },
+      { key: 'fulfillment_rate', label: 'Erfüllungsrate', better: 'higher' },
+      { key: 'cancellation_rate', label: 'Abbruchrate', better: 'lower' },
+      { key: 'start_rate', label: 'Antrittsrate', better: 'higher' },
+      { key: 'completion_rate', label: 'Abschlussrate', better: 'higher' },
+      { key: 'early_end_rate', label: 'Vorzeitige Beendigungsrate', better: 'lower' }
+    ];
+    
+    return metrics.map(metric => {
+      const result = { 
+        metric: metric.label,
+        better: metric.better,
+        data: allCompareAgencies.map(agency => ({
+          agency_name: agency.agency_name,
+          value: Math.round(agency[metric.key as keyof typeof agency] as number * 100),
+          is_selected: agency.is_selected
+        }))
+      };
+      
+      return result;
+    });
+  };
+
+  return (
+    <div className="quotas-page">
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+            Quoten: {selectedAgency.agency_name}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-300">
+            Kennzahlen und Vergleich mit Branchendurchschnitt
+          </p>
+        </div>
+        <div className="flex space-x-3">
+          <button 
+            onClick={() => setShowAgencyComparison(!showAgencyComparison)} 
+            className="text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-medium"
+          >
+            {showAgencyComparison ? 'Agenturvergleich ausblenden' : 'Mit anderen Agenturen vergleichen'}
+          </button>
+        <ExportButton 
+          targetElementId="quotas-content" 
+          filename="quoten-analyse" 
+          pageTitle="Quoten-Analyse" 
+        />
+        </div>
+      </div>
+      
+      <div id="quotas-content" className="print-container">
+        <div className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md">
+          <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">Pipeline-Übersicht: Von Stellenausschreibung bis Abschluss</h3>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Erfolgsfunnel</h4>
+              <div className="h-96">
+                <ResponsiveContainer width="100%" height="100%">
+                  <FunnelChart>
+                    <Tooltip 
+                      formatter={(value: any, name: string, props: any) => {
+                        return [`${value} (${props.payload.percentage})`, name];
+                      }}
+                    />
+                    <Funnel
+                      dataKey="value"
+                      data={prepareFunnelData()}
+                      isAnimationActive
+                    >
+                      <LabelList 
+                        position="inside"
+                        fill="#FFFFFF"
+                        stroke="none"
+                        dataKey="name"
+                        fontSize={12}
+                        fontWeight="bold"
+                      />
+                      <LabelList 
+                        position="inside"
+                        fill="#FFFFFF"
+                        stroke="none"
+                        dataKey="percentage"
+                        fontSize={11}
+                        dy={15}
+                      />
+                      <LabelList 
+                        position="inside"
+                        fill="#FFFFFF"
+                        stroke="none"
+                        dataKey="value"
+                        formatter={(value: any) => `(${value})`}
+                        fontSize={10}
+                        dy={30}
+                      />
+                    </Funnel>
+                  </FunnelChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Positive Prozesskennzahlen</h4>
+              <div className="h-96">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    layout="vertical"
+                    data={prepareDropoffData()}
+                    margin={{ top: 20, right: 50, left: 100, bottom: 5 }}
+                    barGap={0}
+                    barCategoryGap={15}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                    <XAxis type="number" domain={[0, 100]} unit="%" />
+                    <YAxis 
+                      dataKey="stage" 
+                      type="category" 
+                      scale="band"
+                      tick={{ fontSize: 12 }}
+                      width={120}
+                    />
+                    <Tooltip
+                      cursor={{fill: 'rgba(200, 200, 200, 0.2)'}}
+                      formatter={(value: any, name: string, props: any) => {
+                        return [`${value} (${props.payload.percentage})`, props.payload.stage];
+                      }}
+                      labelFormatter={(label) => `${label}`}
+                    />
+                    <Bar dataKey="value" barSize={30}>
+                      {prepareDropoffData().map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                      <LabelList 
+                        dataKey="value" 
+                        position="insideRight" 
+                        fill="#FFFFFF"
+                        formatter={(value: any) => value}
+                        fontWeight="bold"
+                      />
+                      <LabelList 
+                        dataKey="percentage" 
+                        position="insideRight" 
+                        fill="#FFFFFF"
+                        formatter={(value: any) => value}
+                        offset={40}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm text-gray-600 dark:text-gray-300">
+            <p className="font-medium text-md mb-1">Interpretationshilfe:</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Der <span className="font-semibold">Erfolgsfunnel</span> zeigt den Weg von ausgeschriebenen Stellen bis zu erfolgreich abgeschlossenen Einsätzen.</li>
+              <li>Die <span className="font-semibold">Verlustpunkte</span> zeigen, wo und in welchem Umfang Kandidaten im Prozess ausscheiden.</li>
+              <li>Je steiler der Trichter abfällt, desto größer sind die Verluste an dieser Stelle.</li>
+            </ul>
+          </div>
+        </div>
+        
+        <div className="mb-6 flex flex-wrap justify-center items-center bg-blue-50 dark:bg-blue-900/30 p-2 rounded-lg">
+          <button 
+            onClick={() => setShowTrendAnalysis(!showTrendAnalysis)} 
+            className={`mx-2 my-1 px-4 py-2 rounded-full text-sm font-medium ${
+              showTrendAnalysis ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-600'
+            }`}
+          >
+            📈 {showTrendAnalysis ? 'Trendanalyse ausblenden' : 'Trendanalyse anzeigen'}
+          </button>
+          <button 
+            onClick={() => setShowQuotaDetails(!showQuotaDetails)} 
+            className={`mx-2 my-1 px-4 py-2 rounded-full text-sm font-medium ${
+              showQuotaDetails ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-600'
+            }`}
+          >
+            📊 {showQuotaDetails ? 'Detailanalyse ausblenden' : 'Detailanalyse anzeigen'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="metric-card">
+            <h3>Reservierungsrate</h3>
+            <div className="value">{formatPercentage((selectedAgencyScatterData?.reservation_rate || 0.65) * 100)}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Durchschnitt: {formatPercentage((allQuotasData?.industry_average?.reservation_rate || 0.62) * 100)}
+            </div>
+          </div>
+          
+          <div className="metric-card">
+            <h3>Erfüllungsrate</h3>
+            <div className="value">{formatPercentage((selectedAgencyScatterData?.fulfillment_rate || 0.68) * 100)}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Durchschnitt: {formatPercentage((allQuotasData?.industry_average?.fulfillment_rate || 0.65) * 100)}
+            </div>
+          </div>
+          
+          <div className="metric-card relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-2 h-full bg-red-400 rounded-r"></div>
+            <h3>Abbruchrate (vor Anreise)</h3>
+            <div className="value">{cancellationRateData?.cancellation_ratio_gesamt ?? '12.5%'}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              ({cancellationRateData?.cancellation_buckets?.gesamt?.count ?? 15} von {cancellationRateData?.proposal_count ?? 120} Vorschlägen)
+            </div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Linke Spalte - Trendanalyse (wenn angezeigt) */}
+          <div style={{ display: showTrendAnalysis ? 'block' : 'none' }} className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md h-full">
+            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white flex items-center">
+              <span className="mr-2">📈</span> 
+              Trend-Analyse: Quoten im Zeitverlauf
+            </h3>
+            
+            <div className="grid grid-cols-1 gap-6">
+              <div>
+                <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Entwicklung der wichtigsten KPIs</h4>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={prepareHistoricalTrendData()} margin={{ top: 5, right: 50, left: 20, bottom: 5 }}>
+                      <defs>
+                        <linearGradient id="colorReservation" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#4F86C6" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#4F86C6" stopOpacity={0.1}/>
+                        </linearGradient>
+                        <linearGradient id="colorFulfillment" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#65B2A9" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#65B2A9" stopOpacity={0.1}/>
+                        </linearGradient>
+                        <linearGradient id="colorCancellation" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#EF4444" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#EF4444" stopOpacity={0.1}/>
+                        </linearGradient>
+                        <linearGradient id="colorCompletion" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#2E7D32" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#2E7D32" stopOpacity={0.1}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis 
+                        dataKey="period" 
+                        scale="point" 
+                        padding={{ left: 20, right: 20 }} 
+                        tick={{ fontSize: 12, fill: '#666' }}
+                      />
+                      <YAxis 
+                        unit="%" 
+                        domain={[40, 90]} 
+                        tickCount={6} 
+                        tick={{ fontSize: 12, fill: '#666' }}
+                      />
+                      <Tooltip 
+                        formatter={(value) => [`${value}%`]} 
+                        contentStyle={{ backgroundColor: "rgba(255, 255, 255, 0.9)", borderRadius: "8px", border: "none", boxShadow: "0 2px 10px rgba(0,0,0,0.1)" }} 
+                      />
+                      <Legend 
+                        wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} 
+                        iconType="circle" 
+                        iconSize={10}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="reservation_rate" 
+                        name="Reservierungsrate"
+                        stroke="#4F86C6" 
+                        fill="url(#colorReservation)"
+                        strokeWidth={3}
+                        dot={{ r: 4, strokeWidth: 2 }}
+                        activeDot={{ r: 8, stroke: '#4F86C6', strokeWidth: 2 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="fulfillment_rate" 
+                        name="Erfüllungsrate" 
+                        stroke="#65B2A9" 
+                        fill="url(#colorFulfillment)" 
+                        strokeWidth={3}
+                        dot={{ r: 4, strokeWidth: 2 }}
+                        activeDot={{ r: 8, stroke: '#65B2A9', strokeWidth: 2 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="cancellation_rate" 
+                        name="Abbruchrate" 
+                        stroke="#EF4444" 
+                        fill="url(#colorCancellation)" 
+                        strokeWidth={3}
+                        dot={{ r: 4, strokeWidth: 2 }}
+                        activeDot={{ r: 8, stroke: '#EF4444', strokeWidth: 2 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="completion_rate" 
+                        name="Abschlussrate" 
+                        stroke="#2E7D32" 
+                        fill="url(#colorCompletion)" 
+                        strokeWidth={3}
+                        dot={{ r: 4, strokeWidth: 2 }}
+                        activeDot={{ r: 8, stroke: '#2E7D32', strokeWidth: 2 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Rechte Spalte - Quotendetails (wenn angezeigt) */}
+          <div style={{ display: showQuotaDetails ? 'block' : 'none' }} className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md h-full">
+            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white flex items-center">
+              <span className="mr-2">📊</span>
+              Analyse: Abbruchrate vor Anreise
+            </h3>
+            
+            {cancellationRateData && timingData && avgCancellationStats && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <div className="flex items-baseline space-x-4 mb-4">
+                    <div className="text-center">
+                      <span className={`text-3xl font-bold ${ (parseFloat(cancellationRateData?.cancellation_ratio_gesamt?.replace('%','') || '0') <= parseFloat(avgCancellationStats?.avg_cancellation_ratio_gesamt?.replace('%','') || '0')) ? 'text-green-500' : 'text-red-500'}`}>
+                         {cancellationRateData?.cancellation_ratio_gesamt ?? 'N/A'}
+                      </span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Abbruchrate (Gesamt)</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">(Ø {avgCancellationStats?.avg_cancellation_ratio_gesamt ?? 'N/A'})</p>
+                    </div>
+                    <div className="text-center border-l pl-4 border-gray-300 dark:border-gray-600">
+                      <span className="text-xl font-semibold text-gray-700 dark:text-gray-300">{cancellationRateData?.cancellation_buckets?.gesamt?.count ?? 0}</span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Abbrüche</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">(Ø {avgCancellationStats?.avg_cancellation_buckets?.gesamt?.count?.toFixed(1) ?? 'N/A'})</p>
+                    </div>
+                    <div className="text-center">
+                      <span className="text-xl font-semibold text-gray-700 dark:text-gray-300">{cancellationRateData?.proposal_count ?? 0}</span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Vorschläge</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">(Ø {avgCancellationStats?.avg_proposal_count?.toFixed(1) ?? 'N/A'})</p>
+                    </div>
+                  </div>
+                
+                  <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Kurzfristigkeit der Abbrüche</h4>
+                  <div className="h-48"> 
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={getCancellationBucketChartData()} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" unit="%" domain={[0, 100]}/>
+                        <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }}/>
+                        <Tooltip formatter={(value: number, name: string, props: any) => {
+                          if (name === 'Agentur') return [`${value.toFixed(1)}% (${props.payload.count} Fälle)`, name];
+                          if (name === 'Durchschnitt') return [`${value.toFixed(1)}%`, name];
+                          return [value, name];
+                        }}/>
+                        <Legend wrapperStyle={{ fontSize: '12px' }} />
+                        <Bar dataKey="avgPercentage" name="Durchschnitt" fill="#cbd5e1" radius={[0, 4, 4, 0]} barSize={10}/>
+                        <Bar dataKey="percentage" name="Agentur" label={{ position: 'right', formatter: (entry: any) => entry.label ?? '', fontSize: 10 }} radius={[0, 4, 4, 0]} barSize={10}>
+                          {getCancellationBucketChartData().map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Timing der Abbrüche (Median / AVG)</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Median Zeit von geplanter Anreise bis Abbruch:</p>
+                  <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4">
+                    <li>Gesamt: {formatHours(timingData?.overall?.median_hours)}</li>
+                    <li>Ersteinsatz: {formatHours(timingData?.first_stays?.median_hours)}</li>
+                    <li>Folge/Wechsel: {formatHours(timingData?.followup_stays?.median_hours)}</li>
+                  </ul>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">AVG Zeit von geplanter Anreise bis Abbruch:</p>
+                  <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4">
+                    <li>Gesamt: {formatHours(timingData?.overall?.avg_hours)}</li>
+                    <li>Ersteinsatz: {formatHours(timingData?.first_stays?.avg_hours)}</li>
+                    <li>Folge/Wechsel: {formatHours(timingData?.followup_stays?.avg_hours)}</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {showAgencyComparison && (
+          <div className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md">
+            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">Agenturvergleich: Benchmark mit anderen Agenturen</h3>
+            
+            <div className="mb-4">
+              <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Agenturen auswählen (max. 4)</h4>
+              <div className="flex flex-wrap gap-2">
+                {comparisonAgencies
+                  .filter(agency => !agency.is_selected) // Don't show current agency in selection
+                  .map(agency => (
+                    <button
+                      key={agency.agency_id}
+                      onClick={() => handleAgencyComparisonToggle(agency.agency_id)}
+                      className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        selectedComparisonAgencies.includes(agency.agency_id)
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-2 border-blue-400'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                      }`}
+                    >
+                      {agency.agency_name}
+                    </button>
+                  ))}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Quotenvergleich im Überblick</h4>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart outerRadius={90} data={prepareRadarChartData()}>
+                      <PolarGrid />
+                      <PolarAngleAxis dataKey="metric" />
+                      <PolarRadiusAxis angle={30} domain={[0, 100]} />
+                      
+                      {/* Current agency */}
+                      {comparisonAgencies
+                        .filter(a => a.is_selected)
+                        .map((agency, index) => (
+                          <Radar
+                            key={agency.agency_id}
+                            name={agency.agency_name}
+                            dataKey={agency.agency_name}
+                            stroke="#8884d8"
+                            fill="#8884d8"
+                            fillOpacity={0.5}
+                          />
+                        ))}
+                      
+                      {/* Comparison agencies */}
+                      {comparisonAgencies
+                        .filter(a => selectedComparisonAgencies.includes(a.agency_id))
+                        .map((agency, index) => (
+                          <Radar
+                            key={agency.agency_id}
+                            name={agency.agency_name}
+                            dataKey={agency.agency_name}
+                            stroke={['#FF5722', '#4CAF50', '#2196F3', '#FFC107'][index % 4]}
+                            fill={['#FF5722', '#4CAF50', '#2196F3', '#FFC107'][index % 4]}
+                            fillOpacity={0.3}
+                          />
+                        ))}
+                      
+                      <Legend />
+                      <Tooltip formatter={(value) => `${value}%`} />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Detaillierter Vergleich nach Metriken</h4>
+                <div className="space-y-4">
+                  {prepareBarComparisonData().slice(0, 3).map((item, index) => (
+                    <div key={index} className="mb-2">
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{item.metric}</p>
+                      <div className="h-10">
+            <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            layout="vertical"
+                            data={item.data}
+                            margin={{ top: 0, right: 0, left: 120, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis type="number" domain={[0, 100]} unit="%" />
+                            <YAxis dataKey="agency_name" type="category" width={120} tick={{ fontSize: 11 }} />
+                            <Tooltip formatter={(value) => `${value}%`} />
+                            <Bar dataKey="value">
+                              {item.data.map((entry, i) => (
+                                <Cell 
+                                  key={`cell-${i}`} 
+                                  fill={entry.is_selected ? '#8884d8' : ['#FF5722', '#4CAF50', '#2196F3', '#FFC107'][i % 4]} 
+                                  stroke={entry.is_selected ? '#6a5cb6' : 'none'}
+                                  strokeWidth={entry.is_selected ? 2 : 0}
+                                />
+                              ))}
+                            </Bar>
+                          </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm text-gray-600 dark:text-gray-300">
+              <p className="font-medium text-md mb-1">Interpretationshilfe:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Die <span className="font-semibold">Radar-Ansicht</span> erlaubt einen schnellen Vergleich aller KPIs gleichzeitig.</li>
+                <li>Der <span className="font-semibold">detaillierte Vergleich</span> zeigt, wie die Agentur in spezifischen Metriken abschneidet.</li>
+                <li>Für <span className="font-semibold">Abbruchraten</span> und <span className="font-semibold">vorzeitige Beendigungen</span> gilt: Niedrigere Werte sind besser.</li>
+              </ul>
+            </div>
+          </div>
+        )}
+        
+        <div className="dashboard-card mb-8">
+          <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Detaillierte KPIs</h2>
+          
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Kennzahl</th>
+                  <th>{selectedAgency.agency_name}</th>
+                  <th>Branchendurchschnitt</th>
+                  <th>Differenz</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Reservierungsrate</td>
+                  <td>{formatPercentage((selectedAgencyScatterData?.reservation_rate || 0.65) * 100)}</td>
+                  <td>{formatPercentage((allQuotasData?.industry_average?.reservation_rate || 0.62) * 100)}</td>
+                  <td className={selectedAgencyScatterData?.reservation_rate > allQuotasData?.industry_average?.reservation_rate ? 'text-green-600' : 'text-red-600'}>
+                    {formatPercentage(((selectedAgencyScatterData?.reservation_rate || 0.65) - (allQuotasData?.industry_average?.reservation_rate || 0.62)) * 100)}
+                  </td>
+                </tr>
+                <tr>
+                  <td>Erfüllungsrate</td>
+                  <td>{formatPercentage((selectedAgencyScatterData?.fulfillment_rate || 0.68) * 100)}</td>
+                  <td>{formatPercentage((allQuotasData?.industry_average?.fulfillment_rate || 0.65) * 100)}</td>
+                  <td className={selectedAgencyScatterData?.fulfillment_rate > allQuotasData?.industry_average?.fulfillment_rate ? 'text-green-600' : 'text-red-600'}>
+                    {formatPercentage(((selectedAgencyScatterData?.fulfillment_rate || 0.68) - (allQuotasData?.industry_average?.fulfillment_rate || 0.65)) * 100)}
+                  </td>
+                </tr>
+                <tr>
+                  <td>Abbruchrate</td>
+                  <td>{formatPercentage((selectedAgencyScatterData?.cancellation_rate || 0.12) * 100)}</td>
+                  <td>{formatPercentage((allQuotasData?.industry_average?.cancellation_rate || 0.15) * 100)}</td>
+                  <td className={selectedAgencyScatterData?.cancellation_rate < allQuotasData?.industry_average?.cancellation_rate ? 'text-green-600' : 'text-red-600'}>
+                    {formatPercentage(((selectedAgencyScatterData?.cancellation_rate || 0.12) - (allQuotasData?.industry_average?.cancellation_rate || 0.15)) * 100)}
+                  </td>
+                </tr>
+                <tr>
+                  <td>Antrittsrate</td>
+                  <td>{formatPercentage((selectedAgencyScatterData?.start_rate || 0.88) * 100)}</td>
+                  <td>{formatPercentage((allQuotasData?.industry_average?.start_rate || 0.85) * 100)}</td>
+                  <td className={selectedAgencyScatterData?.start_rate > allQuotasData?.industry_average?.start_rate ? 'text-green-600' : 'text-red-600'}>
+                    {formatPercentage(((selectedAgencyScatterData?.start_rate || 0.88) - (allQuotasData?.industry_average?.start_rate || 0.85)) * 100)}
+                  </td>
+                </tr>
+                <tr>
+                  <td>Abschlussrate</td>
+                  <td>{formatPercentage((selectedAgencyScatterData?.completion_rate || 0.82) * 100)}</td>
+                  <td>{formatPercentage((allQuotasData?.industry_average?.completion_rate || 0.78) * 100)}</td>
+                  <td className={selectedAgencyScatterData?.completion_rate > allQuotasData?.industry_average?.completion_rate ? 'text-green-600' : 'text-red-600'}>
+                    {formatPercentage(((selectedAgencyScatterData?.completion_rate || 0.82) - (allQuotasData?.industry_average?.completion_rate || 0.78)) * 100)}
+                  </td>
+                </tr>
+                <tr>
+                  <td>Vorzeitige Beendigungsrate</td>
+                  <td>{formatPercentage((selectedAgencyScatterData?.early_end_rate || 0.18) * 100)}</td>
+                  <td>{formatPercentage((allQuotasData?.industry_average?.early_end_rate || 0.22) * 100)}</td>
+                  <td className={selectedAgencyScatterData?.early_end_rate < allQuotasData?.industry_average?.early_end_rate ? 'text-green-600' : 'text-red-600'}>
+                    {formatPercentage(((selectedAgencyScatterData?.early_end_rate || 0.18) - (allQuotasData?.industry_average?.early_end_rate || 0.22)) * 100)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default QuotasPage; 

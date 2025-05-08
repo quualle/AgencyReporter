@@ -1,0 +1,220 @@
+/* Main layout */
+.content {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+/* Dashboard cards */
+.dashboard-card {
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* KPI metrics */
+.metric-card {
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  text-align: center;
+}
+
+.metric-card h3 {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.metric-card .value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Agency selector dropdown */
+.agency-selector {
+  min-width: 200px;
+  font-weight: 500;
+}
+
+/* Tabs */
+.tabs-container {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 1.5rem;
+}
+
+.tab {
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.2s, border-bottom 0.2s;
+}
+
+.tab:hover {
+  color: var(--highlight-color);
+}
+
+.tab.active {
+  color: var(--highlight-color);
+  border-bottom: 2px solid var(--highlight-color);
+}
+
+/* Tables */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.data-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.data-table tr:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Charts containers */
+.chart-container {
+  height: 400px;
+  margin-bottom: 2rem;
+}
+
+/* Add your custom styles here */
+
+/* Base container styles */
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-container.dark {
+  background-color: #111827;
+  color: #f9fafb;
+}
+
+.main-container {
+  display: flex;
+  flex: 1;
+}
+
+.content {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+/* Dashboard card styles */
+.dashboard-card {
+  background-color: white;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.dark .dashboard-card {
+  background-color: #1f2937;
+}
+
+/* Print styles for PDF export */
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  
+  .app-container, 
+  .main-container, 
+  .content, 
+  .print-container {
+    background-color: white !important;
+    color: black !important;
+  }
+  
+  .dashboard-card,
+  .print-container > div {
+    page-break-inside: avoid;
+    background-color: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: 1px solid #e5e7eb !important;
+  }
+  
+  .print-hide {
+    display: none !important;
+  }
+  
+  /* Fix for SVG and charts */
+  svg, canvas {
+    max-width: 100% !important;
+  }
+  
+  /* Ensure text is readable */
+  .text-gray-600,
+  .text-gray-300,
+  .dark .text-gray-300,
+  .dark .text-gray-600 {
+    color: #4b5563 !important;
+  }
+  
+  .text-gray-800,
+  .text-gray-900,
+  .dark .text-white,
+  .dark .text-gray-800 {
+    color: #1f2937 !important;
+  }
+  
+  /* Fix for hiding unnecessary UI elements */
+  header, 
+  aside,
+  nav,
+  .main-navigation,
+  button:not(.print-show) {
+    display: none !important;
+  }
+  
+  /* Add space between sections */
+  .mb-8 {
+    margin-bottom: 2rem !important;
+  }
+  
+  /* Ensure good page breaks */
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+  
+  table {
+    page-break-inside: avoid;
+  }
+  
+  /* Ensure tables are readable */
+  thead {
+    display: table-header-group;
+  }
+  
+  tr {
+    page-break-inside: avoid;
+  }
+} 
