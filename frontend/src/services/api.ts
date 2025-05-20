@@ -140,6 +140,17 @@ export const apiService = {
     }
   },
 
+  // Quotas (KPIs) aller Agenturen
+  getAllAgenciesQuotas: async (timePeriod: string = 'last_quarter'): Promise<any[]> => {
+    try {
+      const response = await api.post('/kpis/filter', { time_period: timePeriod });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching KPIs for all agencies:', error);
+      return [];
+    }
+  },
+
   getCancellationBeforeArrivalRate: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
     const response = await api.get(`/quotas/${id}/cancellation-before-arrival?time_period=${timePeriod}`);
     return response.data;
