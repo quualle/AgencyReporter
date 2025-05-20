@@ -11,6 +11,7 @@ interface TrendAnalysisWidgetProps {
 
 const TrendAnalysisWidget: React.FC<TrendAnalysisWidgetProps> = ({ data, isLoading }) => {
   const [dataType, setDataType] = useState<string>('count');
+  const [displayMode, setDisplayMode] = useState<string>('relative'); // 'relative' oder 'absolute'
   
   // Wenn noch keine Daten geladen sind oder das Datenformat nicht stimmt
   if (isLoading || !data || data.length === 0) {
@@ -36,8 +37,12 @@ const TrendAnalysisWidget: React.FC<TrendAnalysisWidgetProps> = ({ data, isLoadi
           month: month,
           date: new Date(month + '-01'),
           total: 0,
+          total_carestays: item.total_carestays || 0,
+          percentage: 0,
           cancelled_before_arrival: 0,
           shortened_after_arrival: 0,
+          cancelled_percentage: 0,
+          shortened_percentage: 0,
           satisfied_count: 0,
           not_satisfied_count: 0,
           instant_departure_count: 0,
@@ -51,11 +56,15 @@ const TrendAnalysisWidget: React.FC<TrendAnalysisWidgetProps> = ({ data, isLoadi
       const monthData = monthlyDataMap.get(month);
       monthData.total += item.count;
       monthData.entries += 1;
+      monthData.total_carestays = item.total_carestays || monthData.total_carestays;
+      monthData.percentage = (monthData.total / monthData.total_carestays) * 100;
       
       if (item.event_type === 'cancelled_before_arrival') {
         monthData.cancelled_before_arrival += item.count;
+        monthData.cancelled_percentage = (monthData.cancelled_before_arrival / monthData.total_carestays) * 100;
       } else if (item.event_type === 'shortened_after_arrival') {
         monthData.shortened_after_arrival += item.count;
+        monthData.shortened_percentage = (monthData.shortened_after_arrival / monthData.total_carestays) * 100;
       }
       
       monthData.satisfied_count += item.satisfied_count || 0;
@@ -103,19 +112,28 @@ const TrendAnalysisWidget: React.FC<TrendAnalysisWidgetProps> = ({ data, isLoadi
             <div className="flex items-center justify-between">
               <span className="text-gray-700 dark:text-gray-300">Gesamt: </span>
               <span className="font-medium ml-2 text-gray-900 dark:text-white">
-                {data.total}
+                {displayMode === 'relative' 
+                  ? `${data.percentage.toFixed(1)}% (${data.total}/${data.total_carestays})`
+                  : data.total
+                }
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-700 dark:text-gray-300">Vor Anreise: </span>
               <span className="font-medium ml-2 text-gray-900 dark:text-white">
-                {data.cancelled_before_arrival}
+                {displayMode === 'relative'
+                  ? `${data.cancelled_percentage.toFixed(1)}% (${data.cancelled_before_arrival}/${data.total_carestays})`
+                  : data.cancelled_before_arrival
+                }
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-700 dark:text-gray-300">Nach Anreise: </span>
               <span className="font-medium ml-2 text-gray-900 dark:text-white">
-                {data.shortened_after_arrival}
+                {displayMode === 'relative'
+                  ? `${data.shortened_percentage.toFixed(1)}% (${data.shortened_after_arrival}/${data.total_carestays})`
+                  : data.shortened_after_arrival
+                }
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -128,6 +146,12 @@ const TrendAnalysisWidget: React.FC<TrendAnalysisWidgetProps> = ({ data, isLoadi
               <span className="text-gray-700 dark:text-gray-300">Unzufriedene Kunden: </span>
               <span className="font-medium ml-2 text-gray-900 dark:text-white">
                 {data.not_satisfied_count}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-700 dark:text-gray-300">Einsätze gesamt: </span>
+              <span className="font-medium ml-2 text-gray-900 dark:text-white">
+                {data.total_carestays}
               </span>
             </div>
           </div>
@@ -143,7 +167,7 @@ const TrendAnalysisWidget: React.FC<TrendAnalysisWidgetProps> = ({ data, isLoadi
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
           Problematische Einsätze - Zeitliche Entwicklung
         </h3>
-        <div>
+        <div className="flex gap-2">
           <select
             value={dataType}
             onChange={(e) => setDataType(e.target.value)}
@@ -153,6 +177,15 @@ const TrendAnalysisWidget: React.FC<TrendAnalysisWidgetProps> = ({ data, isLoadi
             <option value="satisfaction">Kundenzufriedenheit</option>
             <option value="ersatz">Ersatz & Folgeeinsätze</option>
           </select>
+          
+          <select
+            value={displayMode}
+            onChange={(e) => setDisplayMode(e.target.value)}
+            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          >
+            <option value="relative">Relativ (%)</option>
+            <option value="absolute">Absolut</option>
+          </select>
         </div>
       </div>
 
@@ -160,7 +193,7 @@ const TrendAnalysisWidget: React.FC<TrendAnalysisWidgetProps> = ({ data, isLoadi
         <div className="h-[400px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             {dataType === 'count' ? (
-              <AreaChart
+              <LineChart
                 data={monthlyData}
                 margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
               >
@@ -173,26 +206,78 @@ const TrendAnalysisWidget: React.FC<TrendAnalysisWidgetProps> = ({ data, isLoadi
                   height={70}
                   tick={{ fontSize: 12 }}
                 />
-                <YAxis />
+                <YAxis 
+                  label={{ 
+                    value: displayMode === 'relative' ? 'Prozent (%)' : 'Anzahl', 
+                    angle: -90, 
+                    position: 'insideLeft',
+                    style: { textAnchor: 'middle' }
+                  }} 
+                />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend />
-                <Area 
-                  type="monotone" 
-                  dataKey="cancelled_before_arrival" 
-                  name="Vor Anreise" 
-                  stackId="1"
-                  stroke="#ef4444" 
-                  fill="#fecaca"
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="shortened_after_arrival" 
-                  name="Nach Anreise" 
-                  stackId="1"
-                  stroke="#f59e0b" 
-                  fill="#fde68a"
-                />
-              </AreaChart>
+                {displayMode === 'relative' ? (
+                  <>
+                    <Line 
+                      type="monotone" 
+                      dataKey="percentage" 
+                      name="Gesamt (%)" 
+                      stroke="#3b82f6" 
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="cancelled_percentage" 
+                      name="Vor Anreise (%)" 
+                      stroke="#ef4444" 
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="shortened_percentage" 
+                      name="Nach Anreise (%)" 
+                      stroke="#f59e0b" 
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Line 
+                      type="monotone" 
+                      dataKey="total" 
+                      name="Gesamt" 
+                      stroke="#3b82f6" 
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="cancelled_before_arrival" 
+                      name="Vor Anreise" 
+                      stroke="#ef4444" 
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="shortened_after_arrival" 
+                      name="Nach Anreise" 
+                      stroke="#f59e0b" 
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </>
+                )}
+              </LineChart>
             ) : dataType === 'satisfaction' ? (
               <LineChart
                 data={monthlyData}
@@ -282,7 +367,11 @@ const TrendAnalysisWidget: React.FC<TrendAnalysisWidgetProps> = ({ data, isLoadi
         </div>
         <div className="text-center mt-3 text-sm text-gray-600 dark:text-gray-400">
           {dataType === 'count' ? (
-            <p>Entwicklung der problematischen Einsätze über Zeit</p>
+            <p>
+              {displayMode === 'relative' 
+                ? 'Relative Entwicklung der problematischen Einsätze über Zeit (% der Gesamteinsätze)' 
+                : 'Absolute Entwicklung der problematischen Einsätze über Zeit'}
+            </p>
           ) : dataType === 'satisfaction' ? (
             <p>Entwicklung der Kundenzufriedenheit und KI-Konfidenz</p>
           ) : (

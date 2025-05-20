@@ -1,0 +1,15 @@
+# Ignore virtual environment files
+venv/
+.venv/
+env/
+**/site-packages/**
+**/__pycache__/**
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Other common files to ignore
+.git/
+node_modules/
+.DS_Store
+*.log 

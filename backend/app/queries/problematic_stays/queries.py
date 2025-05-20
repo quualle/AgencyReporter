@@ -342,6 +342,23 @@ ORDER BY
 
 # Abfrage für Trend-Analyse über die Zeit
 GET_PROBLEMATIC_STAYS_TREND_ANALYSIS = """
+WITH total_carestays_per_month AS (
+  -- Gesamtanzahl aller Pflegeeinsätze pro Agentur und Monat im Zeitraum
+  SELECT
+    c.agency_id,
+    FORMAT_DATE('%Y-%m', DATE(cs.created_at)) AS event_month,
+    COUNT(*) AS total_count
+  FROM
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+  JOIN
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+  WHERE
+    (c.agency_id = @agency_id OR @agency_id IS NULL)
+    AND DATE(cs.created_at) BETWEEN @start_date AND @end_date
+  GROUP BY
+    c.agency_id, event_month
+)
+
 SELECT
   p.agency_id,
   p.agency_name,
@@ -349,6 +366,8 @@ SELECT
   p.event_type,
   p.stay_type,
   COUNT(*) AS count,
+  tc.total_count AS total_carestays,
+  SAFE_DIVIDE(COUNT(*), tc.total_count) * 100 AS percentage,
   COUNTIF(p.has_replacement = TRUE) AS with_replacement_count,
   COUNTIF(p.has_follow_up = TRUE) AS with_follow_up_count,
   COUNTIF(p.instant_departure_after IS NOT NULL AND p.instant_departure_after <= 9) AS instant_departure_count,
@@ -357,6 +376,8 @@ SELECT
   AVG(CAST(JSON_EXTRACT_SCALAR(p.analysis_result, '$.confidence') AS INT64)) AS avg_reason_confidence
 FROM
   `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
+LEFT JOIN
+  total_carestays_per_month tc ON p.agency_id = tc.agency_id AND FORMAT_DATE('%Y-%m', DATE(p.event_date)) = tc.event_month
 WHERE
   p.analysis_status = 'analyzed'
   AND (p.agency_id = @agency_id OR @agency_id IS NULL)
@@ -364,7 +385,7 @@ WHERE
   AND (p.event_type = @event_type OR @event_type IS NULL)
   AND (p.stay_type = @stay_type OR @stay_type IS NULL)
 GROUP BY
-  p.agency_id, p.agency_name, event_month, p.event_type, p.stay_type
+  p.agency_id, p.agency_name, event_month, p.event_type, p.stay_type, tc.total_count
 ORDER BY
   p.agency_id, event_month
 """ 

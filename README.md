@@ -1,74 +1,64 @@
-# AgencyReporter - Installationsanleitung
+# AgencyReporter
 
-Diese Anleitung hilft dir, AgencyReporter auf deinem MacBook einzurichten und zu starten.
+Ein Dashboard zur Analyse von Agentur-Performance und Quotendaten.
 
 ## Voraussetzungen
 
-- Ein MacBook mit macOS
-- Internetverbindung
-- Terminal-Kenntnisse (grundlegend)
+- Docker
+- Docker Compose
 
-## Installation & Start
+## Schnellstart
 
-### Option 1: Einfache Installation (empfohlen)
+1. Klonen Sie das Repository oder kopieren Sie das Projektverzeichnis
 
-1. Öffne das Terminal (über Spotlight mit `Cmd + Leertaste` und dann "Terminal" eingeben)
-2. Navigiere zum entpackten Projektordner:
+2. Führen Sie das Deployment-Skript aus:
    ```
-   cd Pfad/zum/AgencyReporter
-   ```
-3. Mache das Setup-Skript ausführbar:
-   ```
-   chmod +x setup.sh
-   ```
-4. Führe das Setup-Skript aus:
-   ```
-   ./setup.sh
-   ```
-5. Folge den Anweisungen auf dem Bildschirm
-
-Das Skript installiert automatisch alle notwendigen Abhängigkeiten und startet die Anwendung.
-
-### Option 2: Manuelle Installation
-
-Falls das Setup-Skript nicht funktioniert, kannst du die folgenden Schritte manuell ausführen:
-
-1. Installiere Homebrew (falls nicht vorhanden):
-   ```
-   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   ./deploy.sh
    ```
 
-2. Installiere Python und Node.js:
+3. Zugriff auf die Anwendung:
+   - Frontend: http://localhost
+   - Backend API: http://localhost:8000
+
+## Manuelle Installation
+
+Wenn Sie das Deployment-Skript nicht verwenden möchten, können Sie die folgenden Schritte manuell ausführen:
+
+1. Stellen Sie sicher, dass Docker und Docker Compose installiert sind
+
+2. Stellen Sie sicher, dass eine `credentials.json` für Google BigQuery im Hauptverzeichnis liegt
+
+3. Führen Sie die folgenden Befehle aus:
    ```
-   brew install python node
+   docker-compose build
+   docker-compose up -d
    ```
 
-3. Richte das Backend ein:
-   ```
-   cd backend
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
+## Container-Verwaltung
 
-4. Richte das Frontend ein:
-   ```
-   cd ../frontend
-   npm install
-   ```
+- Container starten: `docker-compose up -d`
+- Container stoppen: `docker-compose down`
+- Logs anzeigen: `docker-compose logs`
+- Container-Shell: `docker exec -it agency-reporter-backend sh`
 
-5. Starte das Backend:
-   ```
-   cd ../backend
-   source venv/bin/activate
-   python -m app.main
-   ```
+## Konfiguration
 
-6. Starte das Frontend (in einem neuen Terminal-Fenster):
-   ```
-   cd Pfad/zum/AgencyReporter/frontend
-   npm run dev
-   ```
+Die Anwendung kann über Umgebungsvariablen konfiguriert werden:
+
+- `GOOGLE_APPLICATION_CREDENTIALS`: Pfad zur Google Cloud Credentials-Datei
+- `BIGQUERY_PROJECT_ID`: Google Cloud Projekt-ID
+- `BIGQUERY_DATASET`: BigQuery-Dataset
+- `OPENAI_API_KEY`: OpenAI API-Schlüssel (optional)
+- `OPENAI_MODEL`: OpenAI-Modell (optional)
+
+Siehe auch `.env` und `docker-compose.yml` für weitere Konfigurationsoptionen.
+
+## Fehlerbehebung
+
+Bei Netzwerkproblemen im Frontend bitte sicherstellen, dass die Backend-URL korrekt konfiguriert ist in:
+- `frontend/src/services/api.ts`
+- `frontend/nginx.conf`
+- `frontend/Dockerfile`
 
 ## Verwendung der Anwendung
 
@@ -84,36 +74,6 @@ Für die Verwendung der SQL-Abfragen in BigQuery:
 1. Melde dich bei [Google BigQuery](https://console.cloud.google.com/bigquery) an
 2. Kopiere die gewünschte SQL-Abfrage aus der Anwendung
 3. Füge sie in das BigQuery-Abfragefenster ein und führe sie aus
-
-## Fehlerbehebung
-
-### Problem: "Port wird bereits verwendet"
-
-Wenn du eine Fehlermeldung erhältst, dass der Port 3000 oder 8000 bereits verwendet wird:
-
-```
-lsof -i :3000    # Prüft, welcher Prozess Port 3000 belegt
-lsof -i :8000    # Prüft, welcher Prozess Port 8000 belegt
-kill -9 [PID]    # Beendet den Prozess mit der angegebenen ID
-```
-
-### Problem: "Module nicht gefunden"
-
-Wenn Python-Module nicht gefunden werden:
-```
-cd backend
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### Problem: "Node-Module nicht gefunden"
-
-Wenn Node-Module nicht gefunden werden:
-```
-cd frontend
-rm -rf node_modules
-npm install
-```
 
 ## SQL-Abfragen
 

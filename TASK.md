@@ -348,3 +348,70 @@ Das Ergebnis wird als JSON gespeichert mit folgender Struktur:
   - [ ] Caching für API-Antworten implementieren
   - [ ] Lazy Loading für Dashboard-Komponenten
   - [ ] Memoization für rechenintensive Operationen
+
+### 13.8 UI/UX-Verbesserungen
+- [x] **Hierarchische Darstellung der Übersichtswidgets** (20.05.2025)
+  - [x] Hauptkennzahl "Problematische Einsätze" visuell hervorheben
+  - [x] Verdeutlichung der hierarchischen Beziehung zwischen KPIs durch Layout und Farbkodierung
+  - [x] "Abbrüche vor Anreise" und "Vorzeitige Beendigungen" als Hauptkategorien darstellen
+  - [x] "Sofortige Abreisen (<10 Tage)" als Teilmenge von "Vorzeitige Beendigungen" visualisieren
+  - [x] Erklärende Elemente mit passender visueller Zuordnung darstellen
+  - [x] "Kundenzufriedenheit" als Outcome aller problematischen Einsätze zentriert platzieren
+  - [x] Responsive Anpassung des hierarchischen Layouts für verschiedene Bildschirmgrößen
+  - [x] Hauptkennzahl mit einzigartiger Farbgebung (Smaragd/Türkis-Farbverlauf) hervorheben (20.05.2025)
+  - [x] Alle Widget-Inhalte zentriert statt linksbündig ausrichten (20.05.2025)
+  - [x] Berechnung der Prozentwerte auf Basis der problematischen Einsätze statt aller Einsätze (20.05.2025)
+    - [x] Aussagekraft der Widgets verbessert, um Verteilung innerhalb der Problemfälle zu zeigen
+    - [x] Beschreibungstexte angepasst auf "% aller probl. Einsätze"
+  - [x] Verbesserte Darstellung der Kundenzufriedenheit mit Donut-Chart (20.05.2025)
+    - [x] Intuitive visuelle Darstellung mit farbcodierten Segmenten (grün/rot)
+    - [x] Klare Legende zur Unterscheidung zwischen zufriedenen und unzufriedenen Kunden
+    - [x] Präzisere Beschreibung: "sind trotz Problemen zufrieden"
+    - [x] Absolute Zahlen zur besseren Nachvollziehbarkeit hinzugefügt
+  - [x] Redundantes Agentur-Dropdown-Menü entfernt (20.05.2025)
+    - [x] Vermeidung von Doppelungen in der Benutzeroberfläche
+    - [x] Klarere Seitenstruktur durch Reduzierung auf ein Auswahlmenü
+
+- [ ] **Navigation und Filterung verbessern**
+  - [ ] Sticky-Header für Filter implementieren
+  - [ ] Breadcrumbs zur einfacheren Navigation hinzufügen
+  - [ ] Filter-Presets für häufige Analyseszenarien
+
+## 14. Implementierung des Agenturvergleich-Dashboards
+
+### 14.1 Erstellen der Basis-Strukturen
+- [x] **Neue Dashboard-Seite für Agenturvergleich erstellen**
+  - [x] Layout mit 4 Hauptbereichen für verschiedene Vergleichskategorien
+  - [x] Integration in bestehende Navigationstruktur
+  - [x] Berücksichtigung des Zeitraumfilters für alle Daten
+  - [x] Export-Funktion für PDF-Erstellung
+
+### 14.2 Top-Flop-Rangliste implementieren
+- [x] **Widget für Top-Agenturen nach Einsatztagen**
+  - [x] Horizontales Balkendiagramm für die Top 5 Agenturen
+  - [x] Sortierung nach Einsatztagen (absteigend)
+  - [x] Farbliche Hervorhebung durch grüne Balken
+
+- [x] **Widget für Flop-Agenturen nach Einsatztagen**
+  - [x] Horizontales Balkendiagramm für die 5 schwächsten Agenturen
+  - [x] Sortierung nach Einsatztagen (aufsteigend)
+  - [x] Farbliche Hervorhebung durch rote Balken
+
+### 14.3 Vergleichswerte für Einsatzdauer implementieren
+- [x] **Widget für durchschnittliche Einsatzdauer pro Agentur**
+  - [x] Balkendiagramm für Einsatzdauer (carestay)
+  - [x] Berechnung und Anzeige des Branchendurchschnitts
+  - [x] Farbliche Kennzeichnung (über/unter Durchschnitt)
+  
+- [x] **Widget für durchschnittliche Vertragsdauer pro Agentur**
+  - [x] Balkendiagramm für Vertragsdauer (über mehrere carestays hinweg)
+  - [x] Berechnung und Anzeige des Branchendurchschnitts
+  - [x] Farbliche Kennzeichnung (über/unter Durchschnitt)
+  - [x] Informationstext zur Erklärung der Berechnung
+
+### 14.4 Top-Flop-Liste nach problematischen Einsätzen
+- [x] **Widget für relativen Anteil problematischer Einsätze**
+  - [x] Darstellung der besten und schlechtesten Agenturen
+  - [x] Berechnung des Prozentsatzes problematischer Einsätze
+  - [x] Sortierung nach Anteil problematischer Einsätze
+  - [x] Erklärungstext zur Definition "problematischer Einsätze"

@@ -2,11 +2,20 @@ import axios from 'axios';
 import { calculateDateRange } from '../components/common/TimeFilter';
 
 // Default API URL
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.REACT_APP_API_URL || '/api';
+
+// Überprüfen der URL im Browser-Kontext
+// Wenn es sich um eine direkte Backend-Adresse handelt (wie http://backend:8000),
+// ersetzen wir sie mit localhost, da der Browser den Docker-Container-Namen nicht auflösen kann
+let effectiveApiUrl = API_URL;
+if (typeof window !== 'undefined' && effectiveApiUrl.includes('backend:')) {
+  effectiveApiUrl = effectiveApiUrl.replace('backend:', 'localhost:');
+  console.log('Adjusted API URL for browser environment:', effectiveApiUrl);
+}
 
 // Create an Axios instance with defaults
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: effectiveApiUrl,
   headers: {
     'Content-Type': 'application/json'
   }

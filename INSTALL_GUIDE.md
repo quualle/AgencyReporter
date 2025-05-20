@@ -1,5 +1,7 @@
 # AgencyReporter - Installationsanleitung für Mac-Nutzer
 
+> **Hinweis:** Diese Anwendung wird speziell für einen einzelnen Kunden entwickelt und wird in der finalen Version als Docker-Container oder über ein Shellskript bereitgestellt werden. Die folgende Anleitung dient Entwicklungs- und Testzwecken.
+
 ## Schritt 1: Das Paket erhalten
 
 1. Lade das ZIP-Archiv von [Link zum Download] herunter oder verwende die dir zugesandte ZIP-Datei.
@@ -41,6 +43,17 @@ Nachdem das Setup-Skript erfolgreich durchgelaufen ist, kannst du die Anwendung 
 - **API-Dokumentation:** http://localhost:8000/docs
 
 Um die Anwendung zu beenden, drücke `Strg+C` im Terminal-Fenster.
+
+## Schritt 4: Docker-Container (zukünftige Auslieferungsmethode)
+
+Die finale Version dieser Anwendung wird als Docker-Container bereitgestellt, der alle Abhängigkeiten enthält und keine separate Installation von Python oder Node.js erfordert. Die Installation wird dann mit wenigen Befehlen möglich sein:
+
+```
+docker pull [container-name]
+docker run -p 3000:3000 -p 8000:8000 [container-name]
+```
+
+Diese containerisierte Version wird in einer zukünftigen Aktualisierung verfügbar sein.
 
 ## Fehlerbehebung
 

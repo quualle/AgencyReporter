@@ -249,10 +249,6 @@ const ProblematicStaysPage: React.FC = () => {
         </div>
       )}
 
-      <div className="mb-6">
-        <AgencySelector />
-      </div>
-
       {/* Übersichts-Widgets */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">

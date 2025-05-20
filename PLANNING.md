@@ -155,6 +155,13 @@ agentur-report/
      - Tortendiagramm: Kundenzufriedenheitsverteilung
      - Zeitreihe: Entwicklung problematischer Einsätze über Zeit
      - Vergleichsansicht: Agenturen mit höchster/niedrigster Problemrate
+     - Hierarchische Widget-Darstellung mit klar erkennbaren Beziehungen:
+       - Hauptmetrik: "Problematische Einsätze" als übergeordnete Kennzahl
+       - Teilmengen: "Abbrüche vor Anreise" und "Vorzeitige Beendigungen" als Hauptkategorien
+       - Untergeordnete Teilmenge: "Sofortige Abreisen (<10 Tage)" als Teilmenge von "Vorzeitige Beendigungen"
+       - Erklärende Elemente: "Vorlaufzeit bei Abbrüchen" und "Ersatzbereitstellung" für Abbrüche vor Anreise
+       - Erklärende Elemente: "Durchschn. Verkürzung" für vorzeitige Beendigungen
+       - Outcome: "Kundenzufriedenheit" als Ergebnis aller problematischen Einsätze
 
 ### 5.5 Visuelle Darstellung
 - Scatterplots, Säulendiagramme, Heatmaps, Line Charts, Tabellen.

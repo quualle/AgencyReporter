@@ -9,8 +9,8 @@ services:
       - "8000:8000"
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
-      - BIGQUERY_PROJECT_ID=your-project-id
-      - BIGQUERY_DATASET=your-dataset
+      - BIGQUERY_PROJECT_ID=gcpxbixpflegehilfesenioren
+      - BIGQUERY_DATASET=AgencyReporter
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=gpt-4o
     volumes:
@@ -26,9 +26,11 @@ services:
       - "80:80"
     depends_on:
       - backend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
     networks:
       - agency-network
 
 networks:
   agency-network:
-    driver: bridge 
+    driver: bridge

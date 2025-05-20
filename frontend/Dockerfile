@@ -13,7 +13,7 @@ COPY . .
 
 # Set environment variables for production
 ENV NODE_ENV=production
-ENV REACT_APP_API_URL=http://backend:8000/api
+ENV REACT_APP_API_URL=http://localhost:8000/api
 
 # Build the application
 RUN npm run build
