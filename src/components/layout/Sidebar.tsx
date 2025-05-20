@@ -36,21 +36,6 @@ const Sidebar: React.FC = () => {
             </li>
             <li>
               <Link 
-                to="/agency-comparison"
-                className={`flex items-center px-4 py-2 rounded-md ${
-                  isActive('/agency-comparison') 
-                    ? 'bg-primary-50 text-primary-600 dark:bg-primary-900 dark:text-primary-300' 
-                    : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'
-                }`}
-              >
-                <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-                Agenturvergleich
-              </Link>
-            </li>
-            <li>
-              <Link 
                 to="/quotas"
                 className={`flex items-center px-4 py-2 rounded-md ${
                   isActive('/quotas') 
