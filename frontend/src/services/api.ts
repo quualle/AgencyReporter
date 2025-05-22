@@ -69,7 +69,7 @@ const cacheHelper = {
       expiry: Date.now() + CACHE_EXPIRY
     };
     
-    console.log(`Saved to cache: ${cacheKey}, expires in ${useExtendedCache ? '60' : '15'} minutes`);
+    console.log(`Saved to cache: ${cacheKey}, expires in ${useExtendedCache ? '120' : '30'} minutes`);
   }
 };
 
@@ -655,75 +655,130 @@ export const preloadService = {
     };
 
     try {
-      // Definiere alle zu ladenden Zeiträume
-      const timePeriods = ['last_quarter', 'current_quarter', 'last_year', 'current_year'];
+      // Definiere alle zu ladenden Zeiträume (mehr Zeiträume für bessere Abdeckung)
+      const timePeriods = ['last_quarter', 'current_quarter', 'last_year', 'current_year', 'last_month', 'current_month'];
       
       // Alle Agenturen laden (wird für Vergleiche benötigt)
       progress.status = 'Lade Agentur-Informationen...';
       if (onProgressUpdate) onProgressUpdate({...progress});
       
-      const agencies = await apiService.getAgencies();
+      await apiService.getAgencies();
       
-      // Anzahl der API-Aufrufe berechnen
-      // Für jede Zeitperiode: Quotas, Reaction Times, Profile Quality, Problematic Stays
-      const apiCallsPerPeriod = 4;
+      // API-Aufrufe definieren, die wir vorladen möchten
+      const apiCalls = [];
       
-      // Gesamtzahl der Anfragen (Agenturen * Zeitperioden * API-Aufrufe pro Periode + 1 für Agenturen selbst)
-      progress.totalRequests = timePeriods.length * apiCallsPerPeriod + 1;
+      // 1. API-Aufrufe für QuotasPage
+      // Für jede Zeitperiode die relevanten API-Aufrufe hinzufügen
+      for (const period of timePeriods) {
+        apiCalls.push(
+          { name: `Quotas für ${period}`, fn: () => apiService.getAgencyQuotas(selectedAgencyId, period) },
+          { name: `Cancellation Rate für ${period}`, fn: () => apiService.getCancellationBeforeArrivalRate(selectedAgencyId, period) },
+          { name: `Reaction Times für ${period}`, fn: () => apiService.getAgencyReactionTimes(selectedAgencyId, period) },
+          { name: `Arrival to Cancellation für ${period}`, fn: () => apiService.getArrivalToCancellationStats(selectedAgencyId, period) },
+          { name: `Cancellation Stats für ${period}`, fn: () => apiService.getOverallCancellationBeforeArrivalStats(period) },
+          { name: `Cancellation Reasons für ${period}`, fn: () => apiService.getAgencyCancellationReasons(selectedAgencyId, period) },
+          { name: `Early End Reasons für ${period}`, fn: () => apiService.getAgencyEarlyEndReasons(selectedAgencyId, period) }
+        );
+      }
+      
+      // 2. Zusätzliche API-Aufrufe für ProblematicStaysPage
+      // Wir greifen auf den direkten API-Client zu für Problematic Stays
+      for (const period of timePeriods) {
+        // Für diese Aufrufe müssen wir den Backend-Pfad mit /api/ Präfix verwenden
+        apiCalls.push(
+          { 
+            name: `Problematic Stays Overview für ${period}`, 
+            fn: async () => {
+              try {
+                const result = await api.get(`/problematic_stays/overview`, {
+                  params: { agency_id: selectedAgencyId, time_period: period, useExtendedCache: true }
+                });
+                return result.data;
+              } catch (e) {
+                console.error(`Error fetching problematic stays overview for ${period}:`, e);
+                return null;
+              }
+            } 
+          },
+          { 
+            name: `Problematic Stays Reasons für ${period}`, 
+            fn: async () => {
+              try {
+                const result = await api.get(`/problematic_stays/reasons`, {
+                  params: { agency_id: selectedAgencyId, time_period: period, useExtendedCache: true }
+                });
+                return result.data;
+              } catch (e) {
+                console.error(`Error fetching problematic stays reasons for ${period}:`, e);
+                return null;
+              }
+            } 
+          },
+          { 
+            name: `Problematic Stays Time Analysis für ${period}`, 
+            fn: async () => {
+              try {
+                const result = await api.get(`/problematic_stays/time-analysis`, {
+                  params: { agency_id: selectedAgencyId, time_period: period, useExtendedCache: true }
+                });
+                return result.data;
+              } catch (e) {
+                console.error(`Error fetching problematic stays time analysis for ${period}:`, e);
+                return null;
+              }
+            } 
+          },
+          { 
+            name: `Problematic Stays Heatmap für ${period}`, 
+            fn: async () => {
+              try {
+                const result = await api.get(`/problematic_stays/heatmap`, {
+                  params: { agency_id: selectedAgencyId, time_period: period, useExtendedCache: true }
+                });
+                return result.data;
+              } catch (e) {
+                console.error(`Error fetching problematic stays heatmap for ${period}:`, e);
+                return null;
+              }
+            } 
+          }
+        );
+      }
+
+      // Gesamtzahl der Anfragen
+      progress.totalRequests = apiCalls.length + 1; // +1 für Agenturen
       progress.completedRequests = 1; // Agenturen wurden bereits geladen
       
       if (onProgressUpdate) onProgressUpdate({...progress});
       
-      // Array für alle Promises
-      const loadPromises: Promise<any>[] = [];
-      
-      // Für jede Zeitperiode die Daten laden
-      for (const period of timePeriods) {
-        // Informationen zu API-Aufrufen für Fortschrittsanzeige
-        const apiCalls = [
-          {name: 'Quotas', fn: () => apiService.getAgencyQuotas(selectedAgencyId, period, true, true)},
-          {name: 'Reaction Times', fn: () => apiService.getAgencyReactionTimes(selectedAgencyId, period, true, true)},
-          {name: 'Profile Quality', fn: () => apiService.getAgencyProfileQuality(selectedAgencyId, period, true, true)},
-          {name: 'Problematic Stays', fn: () => apiService.getProblematicStaysOverview(selectedAgencyId, period, true, true)}
-        ];
+      // Jeden API-Aufruf einzeln ausführen, um den Fortschritt zu verfolgen
+      for (let i = 0; i < apiCalls.length; i++) {
+        const call = apiCalls[i];
         
-        // Jeden API-Aufruf einzeln ausführen, um den Fortschritt zu verfolgen
-        for (const call of apiCalls) {
-          progress.status = `Lade ${call.name} für ${period}...`;
-          if (onProgressUpdate) onProgressUpdate({...progress});
+        // Aktualisiere Status mit Prozentangabe
+        const percent = Math.round((i / apiCalls.length) * 100);
+        progress.status = `Lade ${call.name}... (${percent}%)`;
+        if (onProgressUpdate) onProgressUpdate({...progress});
+        
+        try {
+          // Ausführen der Funktion und Messen der Zeit
+          const startTime = Date.now();
+          await call.fn();
+          const endTime = Date.now();
           
-          try {
-            // Prüfe, ob der Cache-Schlüssel berechnet werden kann (für statistische Zwecke)
-            const checkCacheHit = async () => {
-              const result = await call.fn();
-              // Wenn die Funktion schneller als 100ms zurückkehrt, war es wahrscheinlich ein Cache-Hit
-              return [result, true];
-            };
-
-            // Starte die Zeitmessung
-            const startTime = Date.now();
-            const [result, _] = await Promise.race([
-              checkCacheHit(),
-              new Promise<[any, boolean]>(resolve => 
-                setTimeout(() => resolve([null, false]), 100)
-              )
-            ]);
-            
-            // Wenn die Funktion schneller als 100ms zurückkehrt, war es wahrscheinlich ein Cache-Hit
-            const endTime = Date.now();
-            const isCacheHit = endTime - startTime < 100;
-            
-            if (isCacheHit) {
-              progress.cachedEndpoints = (progress.cachedEndpoints || 0) + 1;
-            }
-            
-            // Aktualisiere den Fortschritt
-            progress.completedRequests++;
-            if (onProgressUpdate) onProgressUpdate({...progress});
-          } catch (error) {
-            console.error(`Fehler beim Laden von ${call.name} für ${period}:`, error);
-            // Fortfahren trotz Fehler
+          // Wenn der Aufruf schnell war, war es wahrscheinlich ein Cache-Treffer
+          if (endTime - startTime < 100) {
+            progress.cachedEndpoints = (progress.cachedEndpoints || 0) + 1;
           }
+          
+          // Aktualisiere den Fortschritt
+          progress.completedRequests++;
+          if (onProgressUpdate) onProgressUpdate({...progress});
+        } catch (error) {
+          console.error(`Fehler beim Laden von ${call.name}:`, error);
+          // Aktualisiere den Fortschritt trotz Fehler
+          progress.completedRequests++;
+          if (onProgressUpdate) onProgressUpdate({...progress});
         }
       }
       
