@@ -53,6 +53,11 @@ const PreloadOverlay: React.FC = () => {
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
             {preloadStatus.completedRequests} von {preloadStatus.totalRequests} Abfragen abgeschlossen
             ({Math.round(progress)}%)
+            {preloadStatus.cachedEndpoints !== undefined && preloadStatus.cachedEndpoints > 0 && (
+              <span className="ml-2 text-green-500">
+                ({preloadStatus.cachedEndpoints} aus Cache)
+              </span>
+            )}
           </p>
 
           {/* Bei Fehler einen Fehlermeldung anzeigen */}

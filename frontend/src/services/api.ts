@@ -34,9 +34,9 @@ interface ApiCache {
 
 const apiCache: ApiCache = {};
 
-// Erhöhte Cache-Dauer für längere Preload-Haltbarkeit (60 Minuten)
-const STANDARD_CACHE_EXPIRY = 15 * 60 * 1000; // 15 Minuten
-const EXTENDED_CACHE_EXPIRY = 60 * 60 * 1000; // 60 Minuten
+// Erhöhte Cache-Dauer für längere Preload-Haltbarkeit (120 Minuten für erweitert)
+const STANDARD_CACHE_EXPIRY = 30 * 60 * 1000; // 30 Minuten
+const EXTENDED_CACHE_EXPIRY = 120 * 60 * 1000; // 120 Minuten (2 Stunden)
 
 // Verbesserte Cache-Funktionen
 const cacheHelper = {
@@ -80,6 +80,7 @@ export interface PreloadProgress {
   inProgress: boolean;
   status: string;
   error?: string;
+  cachedEndpoints?: number; // Anzahl der Cache-Treffer
 }
 
 // Types
@@ -649,7 +650,8 @@ export const preloadService = {
       totalRequests: 0,
       completedRequests: 0,
       inProgress: true,
-      status: 'Initialisiere Datenladung...'
+      status: 'Initialisiere Datenladung...',
+      cachedEndpoints: 0
     };
 
     try {
@@ -691,8 +693,29 @@ export const preloadService = {
           if (onProgressUpdate) onProgressUpdate({...progress});
           
           try {
-            // Führe den API-Aufruf aus und warte auf das Ergebnis
-            await call.fn();
+            // Prüfe, ob der Cache-Schlüssel berechnet werden kann (für statistische Zwecke)
+            const checkCacheHit = async () => {
+              const result = await call.fn();
+              // Wenn die Funktion schneller als 100ms zurückkehrt, war es wahrscheinlich ein Cache-Hit
+              return [result, true];
+            };
+
+            // Starte die Zeitmessung
+            const startTime = Date.now();
+            const [result, _] = await Promise.race([
+              checkCacheHit(),
+              new Promise<[any, boolean]>(resolve => 
+                setTimeout(() => resolve([null, false]), 100)
+              )
+            ]);
+            
+            // Wenn die Funktion schneller als 100ms zurückkehrt, war es wahrscheinlich ein Cache-Hit
+            const endTime = Date.now();
+            const isCacheHit = endTime - startTime < 100;
+            
+            if (isCacheHit) {
+              progress.cachedEndpoints = (progress.cachedEndpoints || 0) + 1;
+            }
             
             // Aktualisiere den Fortschritt
             progress.completedRequests++;
