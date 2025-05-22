@@ -38,6 +38,41 @@ const apiCache: ApiCache = {};
 const STANDARD_CACHE_EXPIRY = 15 * 60 * 1000; // 15 Minuten
 const EXTENDED_CACHE_EXPIRY = 60 * 60 * 1000; // 60 Minuten
 
+// Verbesserte Cache-Funktionen
+const cacheHelper = {
+  // Erzeugt einen konsistenten Cache-Schlüssel
+  createCacheKey: (endpoint: string, params: Record<string, any> = {}): string => {
+    // Sortiere Parameter alphabetisch für Konsistenz
+    const sortedParams = Object.keys(params).sort().map(key => 
+      `${key}=${params[key]}`
+    ).join('&');
+    
+    return `${endpoint}${sortedParams ? '?' + sortedParams : ''}`;
+  },
+  
+  // Daten aus dem Cache holen
+  getFromCache: (cacheKey: string): any | null => {
+    if (apiCache[cacheKey] && apiCache[cacheKey].expiry > Date.now()) {
+      console.log(`Cache hit for: ${cacheKey}`);
+      return apiCache[cacheKey].data;
+    }
+    return null;
+  },
+  
+  // Daten in den Cache schreiben
+  saveToCache: (cacheKey: string, data: any, useExtendedCache: boolean = false): void => {
+    const CACHE_EXPIRY = useExtendedCache ? EXTENDED_CACHE_EXPIRY : STANDARD_CACHE_EXPIRY;
+    
+    apiCache[cacheKey] = {
+      data,
+      timestamp: new Date().toISOString(),
+      expiry: Date.now() + CACHE_EXPIRY
+    };
+    
+    console.log(`Saved to cache: ${cacheKey}, expires in ${useExtendedCache ? '60' : '15'} minutes`);
+  }
+};
+
 // Interface für Preload-Fortschritt und Status
 export interface PreloadProgress {
   totalRequests: number;
@@ -166,14 +201,35 @@ export const apiService = {
   },
 
   // Quotas (KPIs)
-  getAgencyQuotas: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+  getAgencyQuotas: async (
+    id: string, 
+    timePeriod: string = 'last_quarter', 
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
     try {
       // Überprüfen, ob der Zeitraum gültig ist
       const validTimePeriods = ['last_quarter', 'last_month', 'last_year', 'all_time', 'current_quarter', 'current_month', 'current_year'];
       
       if (validTimePeriods.includes(timePeriod)) {
-        // Normaler API-Aufruf für gültige Zeiträume
+        // Cache-Schlüssel erstellen
+        const cacheKey = cacheHelper.createCacheKey(`quotas/${id}/all`, { time_period: timePeriod });
+        
+        // Prüfen, ob Daten im Cache sind
+        if (!forceRefresh) {
+          const cachedData = cacheHelper.getFromCache(cacheKey);
+          if (cachedData) {
+            return cachedData;
+          }
+        }
+        
+        // Normaler API-Aufruf für gültige Zeiträume, wenn keine Cache-Daten verfügbar
+        console.log(`Fetching fresh quotas data for agency ${id}, period ${timePeriod}`);
         const response = await api.get(`/quotas/${id}/all?time_period=${timePeriod}`);
+        
+        // Speichere Daten im Cache
+        cacheHelper.saveToCache(cacheKey, response.data, useExtendedCache);
+        
         return response.data;
       } else {
         // Für nicht unterstützte Zeiträume wie "last_6months" benutzen wir benutzerdefinierte Datumsparameter
@@ -183,7 +239,7 @@ export const apiService = {
         const { startDate, endDate } = calculateTimeRangeForPeriod(timePeriod);
         
         // Benutzerdefinierten Datumsbereich-API verwenden
-        return await apiService.getAgencyQuotasWithCustomDates(id, startDate, endDate);
+        return await apiService.getAgencyQuotasWithCustomDates(id, startDate, endDate, forceRefresh, useExtendedCache);
       }
     } catch (error) {
       console.error(`Error fetching KPIs for agency ${id}:`, error);
@@ -213,10 +269,34 @@ export const apiService = {
   },
   
   // Quotas (KPIs) mit benutzerdefinierten Datumsparametern
-  getAgencyQuotasWithCustomDates: async (id: string, startDate: string, endDate: string): Promise<any> => {
+  getAgencyQuotasWithCustomDates: async (
+    id: string, 
+    startDate: string, 
+    endDate: string,
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
     try {
+      // Cache-Schlüssel erstellen
+      const cacheKey = cacheHelper.createCacheKey(`quotas/${id}/all`, { 
+        start_date: startDate, 
+        end_date: endDate 
+      });
+      
+      // Prüfen, ob Daten im Cache sind
+      if (!forceRefresh) {
+        const cachedData = cacheHelper.getFromCache(cacheKey);
+        if (cachedData) {
+          return cachedData;
+        }
+      }
+      
       console.log(`Fetching quotas for agency ${id} with custom dates: ${startDate} to ${endDate}`);
       const response = await api.get(`/quotas/${id}/all?start_date=${startDate}&end_date=${endDate}`);
+      
+      // Speichere Daten im Cache
+      cacheHelper.saveToCache(cacheKey, response.data, useExtendedCache);
+      
       return response.data;
     } catch (error) {
       console.error(`Error fetching KPIs with custom dates for agency ${id}:`, error);
@@ -251,8 +331,29 @@ export const apiService = {
   },
 
   // Reaction Times - Einzelne Agentur
-  getAgencyReactionTimes: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+  getAgencyReactionTimes: async (
+    id: string, 
+    timePeriod: string = 'last_quarter',
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
+    // Cache-Schlüssel erstellen
+    const cacheKey = cacheHelper.createCacheKey(`reaction_times/${id}`, { time_period: timePeriod });
+    
+    // Prüfen, ob Daten im Cache sind
+    if (!forceRefresh) {
+      const cachedData = cacheHelper.getFromCache(cacheKey);
+      if (cachedData) {
+        return cachedData;
+      }
+    }
+    
+    console.log(`Fetching reaction times for agency ${id}, period ${timePeriod}`);
     const response = await api.get(`/reaction_times/${id}?time_period=${timePeriod}`);
+    
+    // Speichere Daten im Cache
+    cacheHelper.saveToCache(cacheKey, response.data, useExtendedCache);
+    
     return response.data;
   },
   getPostingToReservationStats: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
@@ -322,14 +423,36 @@ export const apiService = {
   },
 
   // Profile Quality
-  getAgencyProfileQuality: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+  getAgencyProfileQuality: async (
+    id: string, 
+    timePeriod: string = 'last_quarter',
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
     try {
+      // Cache-Schlüssel erstellen
+      const cacheKey = cacheHelper.createCacheKey(`profile_quality/${id}`, { time_period: timePeriod });
+      
+      // Prüfen, ob Daten im Cache sind
+      if (!forceRefresh) {
+        const cachedData = cacheHelper.getFromCache(cacheKey);
+        if (cachedData) {
+          return cachedData;
+        }
+      }
+      
+      console.log(`Fetching profile quality for agency ${id}, period ${timePeriod}`);
       const response = await api.get(`/profile_quality/${id}?time_period=${timePeriod}`);
+      
+      // Speichere Daten im Cache
+      cacheHelper.saveToCache(cacheKey, response.data, useExtendedCache);
+      
       return response.data;
     } catch (error) {
       console.warn('Profile quality API returned an error:', error);
-      // Gebe Dummy-Daten zurück, um die Anwendung am Laufen zu halten
-      return {
+      
+      // Dummy-Daten für Fehlerfall
+      const fallbackData = {
         profile_completeness: 0.75, // 75% vollständig
         avatar_exists: true,
         description_quality: 0.8, // 80% Qualität
@@ -337,6 +460,12 @@ export const apiService = {
         example_pflegekraefte: 3, // 3 Beispiel-Pflegekräfte
         message_template_exists: true
       };
+      
+      // Auch Fehler-Fallback-Daten cachen, um wiederholte Fehleranfragen zu vermeiden
+      const cacheKey = cacheHelper.createCacheKey(`profile_quality/${id}`, { time_period: timePeriod });
+      cacheHelper.saveToCache(cacheKey, fallbackData, useExtendedCache);
+      
+      return fallbackData;
     }
   },
 
@@ -352,23 +481,62 @@ export const apiService = {
   },
 
   // Problematic Stays API
-  getProblematicStaysOverview: async (agencyId?: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+  getProblematicStaysOverview: async (
+    agencyId?: string, 
+    timePeriod: string = 'last_quarter',
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
     try {
+      // Parameter für URL und Cache-Schlüssel
+      const params: Record<string, any> = { time_period: timePeriod };
+      if (agencyId) {
+        params.agency_id = agencyId;
+      }
+      
+      // Cache-Schlüssel erstellen
+      const cacheKey = cacheHelper.createCacheKey(`problematic_stays/overview`, params);
+      
+      // Prüfen, ob Daten im Cache sind
+      if (!forceRefresh) {
+        const cachedData = cacheHelper.getFromCache(cacheKey);
+        if (cachedData) {
+          return cachedData;
+        }
+      }
+      
+      // URL erstellen
       const url = agencyId 
         ? `/problematic_stays/overview?agency_id=${agencyId}&time_period=${timePeriod}`
         : `/problematic_stays/overview?time_period=${timePeriod}`;
       
+      console.log(`Fetching problematic stays overview ${agencyId ? 'for agency ' + agencyId : ''}, period ${timePeriod}`);
       const response = await api.get(url);
+      
+      // Speichere Daten im Cache
+      cacheHelper.saveToCache(cacheKey, response.data, useExtendedCache);
+      
       return response.data;
     } catch (error) {
       console.error('Error fetching problematic stays overview:', error);
-      // Leere Ergebnisse zurückgeben, damit die UI nicht abstürzt
-      return {
+      
+      // Fallback-Daten für Fehlerfall
+      const fallbackData = {
         agency_id: agencyId || null,
         time_period: timePeriod,
         data: [],
         count: 0
       };
+      
+      // Auch Fehler-Fallback-Daten cachen
+      const params: Record<string, any> = { time_period: timePeriod };
+      if (agencyId) {
+        params.agency_id = agencyId;
+      }
+      const cacheKey = cacheHelper.createCacheKey(`problematic_stays/overview`, params);
+      cacheHelper.saveToCache(cacheKey, fallbackData, useExtendedCache);
+      
+      return fallbackData;
     }
   },
 
@@ -511,10 +679,10 @@ export const preloadService = {
       for (const period of timePeriods) {
         // Informationen zu API-Aufrufen für Fortschrittsanzeige
         const apiCalls = [
-          {name: 'Quotas', fn: () => apiService.getAgencyQuotas(selectedAgencyId, period)},
-          {name: 'Reaction Times', fn: () => apiService.getAgencyReactionTimes(selectedAgencyId, period)},
-          {name: 'Profile Quality', fn: () => apiService.getAgencyProfileQuality(selectedAgencyId, period)},
-          {name: 'Problematic Stays', fn: () => apiService.getProblematicStaysOverview(selectedAgencyId, period)}
+          {name: 'Quotas', fn: () => apiService.getAgencyQuotas(selectedAgencyId, period, true, true)},
+          {name: 'Reaction Times', fn: () => apiService.getAgencyReactionTimes(selectedAgencyId, period, true, true)},
+          {name: 'Profile Quality', fn: () => apiService.getAgencyProfileQuality(selectedAgencyId, period, true, true)},
+          {name: 'Problematic Stays', fn: () => apiService.getProblematicStaysOverview(selectedAgencyId, period, true, true)}
         ];
         
         // Jeden API-Aufruf einzeln ausführen, um den Fortschritt zu verfolgen
