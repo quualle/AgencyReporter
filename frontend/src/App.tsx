@@ -15,6 +15,7 @@ import AgencyComparisonPage from './pages/AgencyComparisonPage';
 // Import layout components
 import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
+import PreloadOverlay from './components/common/PreloadOverlay';
 
 const App: React.FC = () => {
   return (
@@ -35,6 +36,8 @@ const App: React.FC = () => {
           </Routes>
         </main>
       </div>
+      {/* Preload-Overlay (wird nur angezeigt, wenn showPreloadOverlay im AppStore true ist) */}
+      <PreloadOverlay />
     </div>
   );
 };

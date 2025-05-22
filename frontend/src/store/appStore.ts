@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { PreloadProgress } from '../services/api';
 
 interface AgencyData {
   agency_id: string;
@@ -25,6 +26,12 @@ interface AppStore {
   // Loading state
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
+  
+  // Preload state
+  preloadStatus: PreloadProgress | null;
+  setPreloadStatus: (status: PreloadProgress | null) => void;
+  showPreloadOverlay: boolean;
+  setShowPreloadOverlay: (show: boolean) => void;
 }
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -47,4 +54,10 @@ export const useAppStore = create<AppStore>((set) => ({
   // Default loading state is false
   isLoading: false,
   setIsLoading: (loading) => set({ isLoading: loading }),
+  
+  // Preload state
+  preloadStatus: null,
+  setPreloadStatus: (status) => set({ preloadStatus: status }),
+  showPreloadOverlay: false,
+  setShowPreloadOverlay: (show) => set({ showPreloadOverlay: show }),
 })); 

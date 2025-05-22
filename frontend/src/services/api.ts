@@ -34,6 +34,19 @@ interface ApiCache {
 
 const apiCache: ApiCache = {};
 
+// Erhöhte Cache-Dauer für längere Preload-Haltbarkeit (60 Minuten)
+const STANDARD_CACHE_EXPIRY = 15 * 60 * 1000; // 15 Minuten
+const EXTENDED_CACHE_EXPIRY = 60 * 60 * 1000; // 60 Minuten
+
+// Interface für Preload-Fortschritt und Status
+export interface PreloadProgress {
+  totalRequests: number;
+  completedRequests: number;
+  inProgress: boolean;
+  status: string;
+  error?: string;
+}
+
 // Types
 export interface Agency {
   agency_id: string;
@@ -74,12 +87,12 @@ export const apiService = {
   },
   
   // Agency Comparison Data
-  getAgencyComparisonData: async (timePeriod: string = 'last_quarter', forceRefresh: boolean = false): Promise<any> => {
+  getAgencyComparisonData: async (timePeriod: string = 'last_quarter', forceRefresh: boolean = false, useExtendedCache: boolean = false): Promise<any> => {
     // Create a cache key based on the parameters
     const cacheKey = `agencyComparisonData_${timePeriod}`;
     
-    // Cache expiry time (15 minutes = 900000 milliseconds)
-    const CACHE_EXPIRY = 15 * 60 * 1000;
+    // Wähle Cache-Dauer basierend auf Preload-Anforderung
+    const CACHE_EXPIRY = useExtendedCache ? EXTENDED_CACHE_EXPIRY : STANDARD_CACHE_EXPIRY;
     
     // Check if we have cached data and it's not expired and not forcing refresh
     if (!forceRefresh && apiCache[cacheKey] && apiCache[cacheKey].expiry > Date.now()) {
@@ -452,6 +465,96 @@ export const apiService = {
         count: 0,
         limit: limit
       };
+    }
+  }
+};
+
+// Neue Preload-Funktion
+export const preloadService = {
+  // Preload alle Daten für die wichtigsten Zeitperioden und Ansichten
+  preloadAllData: async (
+    selectedAgencyId: string,
+    onProgressUpdate?: (progress: PreloadProgress) => void
+  ): Promise<boolean> => {
+    // Fortschrittsobjekt initialisieren
+    const progress: PreloadProgress = {
+      totalRequests: 0,
+      completedRequests: 0,
+      inProgress: true,
+      status: 'Initialisiere Datenladung...'
+    };
+
+    try {
+      // Definiere alle zu ladenden Zeiträume
+      const timePeriods = ['last_quarter', 'current_quarter', 'last_year', 'current_year'];
+      
+      // Alle Agenturen laden (wird für Vergleiche benötigt)
+      progress.status = 'Lade Agentur-Informationen...';
+      if (onProgressUpdate) onProgressUpdate({...progress});
+      
+      const agencies = await apiService.getAgencies();
+      
+      // Anzahl der API-Aufrufe berechnen
+      // Für jede Zeitperiode: Quotas, Reaction Times, Profile Quality, Problematic Stays
+      const apiCallsPerPeriod = 4;
+      
+      // Gesamtzahl der Anfragen (Agenturen * Zeitperioden * API-Aufrufe pro Periode + 1 für Agenturen selbst)
+      progress.totalRequests = timePeriods.length * apiCallsPerPeriod + 1;
+      progress.completedRequests = 1; // Agenturen wurden bereits geladen
+      
+      if (onProgressUpdate) onProgressUpdate({...progress});
+      
+      // Array für alle Promises
+      const loadPromises: Promise<any>[] = [];
+      
+      // Für jede Zeitperiode die Daten laden
+      for (const period of timePeriods) {
+        // Informationen zu API-Aufrufen für Fortschrittsanzeige
+        const apiCalls = [
+          {name: 'Quotas', fn: () => apiService.getAgencyQuotas(selectedAgencyId, period)},
+          {name: 'Reaction Times', fn: () => apiService.getAgencyReactionTimes(selectedAgencyId, period)},
+          {name: 'Profile Quality', fn: () => apiService.getAgencyProfileQuality(selectedAgencyId, period)},
+          {name: 'Problematic Stays', fn: () => apiService.getProblematicStaysOverview(selectedAgencyId, period)}
+        ];
+        
+        // Jeden API-Aufruf einzeln ausführen, um den Fortschritt zu verfolgen
+        for (const call of apiCalls) {
+          progress.status = `Lade ${call.name} für ${period}...`;
+          if (onProgressUpdate) onProgressUpdate({...progress});
+          
+          try {
+            // Führe den API-Aufruf aus und warte auf das Ergebnis
+            await call.fn();
+            
+            // Aktualisiere den Fortschritt
+            progress.completedRequests++;
+            if (onProgressUpdate) onProgressUpdate({...progress});
+          } catch (error) {
+            console.error(`Fehler beim Laden von ${call.name} für ${period}:`, error);
+            // Fortfahren trotz Fehler
+          }
+        }
+      }
+      
+      // Abschluss
+      progress.completedRequests = progress.totalRequests;
+      progress.inProgress = false;
+      progress.status = 'Alle Daten erfolgreich geladen!';
+      
+      if (onProgressUpdate) onProgressUpdate({...progress});
+      
+      return true;
+    } catch (error) {
+      console.error('Fehler beim Preloading der Daten:', error);
+      
+      // Fehler im Fortschrittsobjekt vermerken
+      progress.inProgress = false;
+      progress.status = 'Fehler beim Laden der Daten';
+      progress.error = error instanceof Error ? error.message : 'Unbekannter Fehler';
+      
+      if (onProgressUpdate) onProgressUpdate({...progress});
+      
+      return false;
     }
   }
 };

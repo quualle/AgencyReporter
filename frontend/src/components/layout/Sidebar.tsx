@@ -2,13 +2,45 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAppStore } from '../../store/appStore';
 import TimeFilter from '../common/TimeFilter';
+import { preloadService } from '../../services/api';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
-  const { activeTab, setActiveTab } = useAppStore();
+  const { 
+    activeTab, 
+    setActiveTab, 
+    selectedAgency, 
+    setPreloadStatus, 
+    setShowPreloadOverlay,
+    preloadStatus
+  } = useAppStore();
   
   const isActive = (path: string) => {
     return location.pathname === path;
+  };
+  
+  const handlePreloadClick = async () => {
+    if (!selectedAgency) return;
+    
+    // Zeige das Overlay an
+    setShowPreloadOverlay(true);
+    
+    // Initialisiere den Preload-Status
+    setPreloadStatus({
+      totalRequests: 1,
+      completedRequests: 0,
+      inProgress: true,
+      status: 'Initialisiere Datenladung...'
+    });
+    
+    // Starte den Preload-Prozess
+    await preloadService.preloadAllData(
+      selectedAgency.agency_id,
+      (progress) => {
+        // Aktualisiere den Status im Store
+        setPreloadStatus(progress);
+      }
+    );
   };
 
   return (
@@ -149,6 +181,30 @@ const Sidebar: React.FC = () => {
         <div className="mt-8">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Zeitraum</h3>
           <TimeFilter />
+        </div>
+        
+        <div className="mt-8">
+          <button
+            onClick={handlePreloadClick}
+            disabled={!selectedAgency || (preloadStatus?.inProgress || false)}
+            className={`w-full flex items-center justify-center px-4 py-3 rounded-md 
+              ${!selectedAgency || (preloadStatus?.inProgress || false)
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
+                : 'bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-700 dark:hover:bg-primary-800'
+              } transition-colors duration-200 ease-in-out`}
+          >
+            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+            {preloadStatus?.inProgress 
+              ? `Lädt... (${preloadStatus.completedRequests}/${preloadStatus.totalRequests})` 
+              : 'Alle Daten laden'}
+          </button>
+          {preloadStatus && !preloadStatus.inProgress && !preloadStatus.error && (
+            <p className="text-xs text-green-600 mt-2 text-center">
+              Daten erfolgreich geladen!
+            </p>
+          )}
         </div>
       </div>
     </aside>
