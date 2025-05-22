@@ -1,378 +1,271 @@
-# Tasks für die Optimierung der Reaktionszeiten- und Quoten-Seite
+# Vollständiger Ausbau des Agenturvergleichsmoduls
 
-## 1. Reaktionszeiten-Seite überprüfen
-- [ ] Alle Widgets nochmals genau ansehen.
-- [ ] Sicherstellen, dass jedes Widget eine konkrete Fragestellung des CEOs beantwortet.
-- [ ] Plausibilität der Daten überprüfen, insbesondere auf Filter und SQL-Queries, die die Daten ungewollt verzerren könnten.pass
+## 1. Verfügbare API-Endpoints und Nutzungsmöglichkeiten
 
-## 2. Quoten-Seite: Pipeline-Übersicht überarbeiten
-- [x] Im Widget "Pipeline-Übersicht: von Stellenausschreibung bis Abschluss" die angezeigten Werte anpassen.
-  - [x] "Personalvorschläge" zu "Stellen mit PV" umbenannt (28.06.2024)
-  - [x] "Angetretene Einsätze" zu "Angetretene Ersteinsätze" präzisiert, um nur first_stays zu berücksichtigen (28.06.2024)
-- [x] Überprüfen, welche SQL-Queries im Hintergrund genutzt werden.
-  - [x] GET_PV_COUNT angepasst, um DISTINCT posting_id zu zählen (28.06.2024)
-  - [x] GET_COMPLETED_CARE_STAYS optimiert, um auch Verlängerungen und leichte Verkürzungen (bis 14 Tage) als erfolgreich zu werten (28.06.2024)
-- [x] Sicherstellen, dass im Erfolgsfunnel die tatsächlichen absoluten Zahlen dargestellt werden.
-- [x] Dropdown-Menü zur Auswahl von "Nur Ersteinsätze", "Nur Wechseleinsätze" und "Gesamt" hinzugefügt (29.06.2024)
+### 1.1 Kernendpoints für Agenturvergleiche
 
-## 3. Konfigurierbarer Vergleichswert im Dashboard
-- [x] Vergleichswert variabel über ein Dropdown auswählbar machen (08.07.2024)
-  - [x] Durchschnitt aller Agenturen (Standard)
-  - [x] Historischer Wert der gleichen Agentur aus einer Vorperiode
-  - [x] Vergleich mit einer frei auswählbaren anderen Agentur
-- [x] Sicherstellen, dass die optische Struktur und Klarheit des Dashboards erhalten bleibt (09.07.2024)
+- **Grundlegende Daten und KPIs**
+  - `/api/agencies/` - Liste aller Agenturen
+  - `/api/kpis/filter` - KPIs für alle Agenturen basierend auf Zeitfilter
+  - `/api/kpis/compare` - Vergleich einer Agentur mit allen anderen und Branchendurchschnitt
 
-## 4. Top-Ten- und Flop-Ten-Anzeige für jede KPI
-- [ ] Für ausgewählte KPIs die Top-Ten und Flop-Ten Agenturen anzeigen
-  - [ ] Button zum Ein- und Ausblenden implementieren
-  - [ ] Zunächst auf ein bis zwei exemplarische KPIs beschränken
-  - [ ] Dashboard optisch aufgeräumt halten
+- **Leistungsfähigkeit und Volumen**
+  - `/api/quotas/postings` - Metriken für alle Ausschreibungen
+  - `/api/quotas/stats/overall/cancellation-before-arrival` - Durchschnittliche Stornierungsstatistiken
+  - `/api/reaction_times/filter` - Reaktionszeiten für alle Agenturen
 
-## 5. Gesamtrangliste auf Basis aller KPIs
-- [ ] Rangliste der Agenturen basierend auf allen KPIs erstellen
-- [ ] Gewichtung der KPIs konfigurierbar machen
-- [ ] Beste Agentur auf Basis einer Gesamtbewertung identifizieren
+- **Qualitäts- und Problemmetriken**
+  - `/api/problematic_stays/overview` - Statistiken zu problematischen Einsätzen (mit/ohne agency_id)
+  - `/api/problematic_stays/reasons` - Gründe für problematische Einsätze
+  - `/api/problematic_stays/heatmap` - Heatmap-Analyse der Abbruchgründe nach Agentur
+  - `/api/profile_quality/filter` - Profilqualitätsmetriken für alle Agenturen
+  - `/api/llm_analysis/{agency_id}/strength-weakness` - Stärken und Schwächen einer Agentur
 
-## 6. Monitoring- und Long-Term-Watcher-System
-- [ ] System zur Überwachung von KPIs entwickeln (ggf. mit n8n)
-- [ ] Automatische Benachrichtigungen bei Über- oder Unterschreitung von Schwellenwerten konfigurieren
-- [ ] Sicherstellen, dass wichtige Ereignisse (negativ oder positiv) nicht unbemerkt bleiben
+### 1.2 Tiefergehende Analyse-Endpoints
 
-## 7. Quoten-Seite: Kleine Widgets überprüfen
-- [ ] **Reservierungsrate:**  
-  - [ ] Der dargestellte Wert scheint im Format 1-x falsch zu sein.  
-  - [ ] SQL-Query überprüfen und ggf. korrigieren.
-- [ ] **Eindeutige Reservierungen:**  
-  - [ ] Scheint korrekt, sollte aber zur Sicherheit überprüft werden.
-- [ ] **Reservierungserfüllungsrate:**  
-  - [ ] Ebenfalls korrekt erscheinend, dennoch eine Kontrolle der SQL-Query erforderlich.
-- [ ] **Abbruchrate vor Anreise:**  
-  - [ ] Aktuell korrekt dargestellt.  
-  - [ ] Ergänzen um:  
-    - [ ] Abbruchrate nach Anreise  
-    - [ ] Abbruchrate gesamt (Summe beider Abbruchraten)
+- **Zeitliche Analyse**
+  - `/api/problematic_stays/time-analysis` - Zeitliche Trends problematischer Einsätze
+  - `/api/problematic_stays/trend-analysis` - Längerfristige Entwicklungstrends
 
-## 8. Quoten-Seite: Trendanalyse und Periodenvergleich optimieren
-- [ ] **Button "Trend anzeigen" prominenter positionieren**, da er wichtig ist und aktuell zu wenig Aufmerksamkeit bekommt.
-- [ ] **Trendanalyse: Quoten im Zeitverlauf:**  
-  - [ ] Y-Achse sinnvoll skalieren, um Veränderungen besser erkennbar zu machen.
-  - [ ] Optional: Delta (Veränderung) statt absolute Werte anzeigen, um Trends sichtbarer zu machen.
-  - [ ] SQL-Query identifizieren und inhaltlich überprüfen.
-- [ ] **Periodenvergleich: aktuell vs. Vorperiode vs. Vorjahr:**  
-  - [ ] Optische Optimierung zur besseren Lesbarkeit (weniger visuelle Überlastung).
-  - [ ] Überlegen, die auswählbaren Vergleichszeiträume einstellbar zu machen oder zumindest die exakten Zeiträume (mit Datumsangabe) einzublenden.
+- **Detailanalysen**
+  - `/api/problematic_stays/customer-satisfaction` - Kundenzufriedenheit bei Problemfällen
+  - `/api/problematic_stays/replacement-analysis` - Ersatzbereitstellung bei Abbrüchen
+  - `/api/quotas_with_reasons/{agency_id}/all-problem-cases` - Alle Problemfälle mit Gründen
 
-## 9. Quoten-Seite: Detaillierte KPIs und Export-Funktion
-- [ ] Widget "Detaillierte KPIs" weiterhin am unteren Ende der Seite belassen.
-- [ ] Button zum Export der Rohdaten hinzufügen, um eine schnelle KI-gestützte Analyse zu ermöglichen.
-- [ ] Neben dem "Als PDF exportieren"-Button einen neuen Button "Zu den detaillierten KPIs" einfügen, der direkt zu diesem Abschnitt scrollt.
+## 2. Umfassende Strategie für den Agenturvergleich
 
-## 10. Quoten-Seite: Vergleich mit anderen Agenturen
-- [x] Neue "Vergleichsansicht" Dropdown-Funktionalität vollständig implementieren:
-  - [x] "Mit sich selbst" Ansicht implementieren (09.07.2024)
-  - [x] "Mit anderer Agentur" Ansicht implementieren (09.07.2024)
-  - [x] "Mit Durchschnitt" Ansicht implementieren (Standard) (08.07.2024)
-- [ ] Widget "Mit anderen Agenturen vergleichen" mit realen Daten befüllen
-- [x] Integration mit "Konfigurierbarem Vergleichswert" (Punkt 3) (09.07.2024)
+Die überarbeitete Agenturvergleichsseite muss folgende strategische Aspekte abdecken:
 
-## 11. Implementierung des "quotas_with_reasons"-Moduls
-- [x] n8n-Workflow für die Identifikation relevanter Einsätze erstellen
-  - [x] SQL-Query für abgebrochene Ersteinsätze entwickeln (mit/ohne Ersatzlieferung)
-  - [x] SQL-Query für abgebrochene Wechseleinsätze entwickeln (mit/ohne Ersatzlieferung)
-  - [x] SQL-Query für nach Anreise verkürzte Einsätze (>2 Wochen) entwickeln
-  - [x] Unterscheidung zwischen verkürzten Einsätzen mit Folgeeinsatz vs. Kündigung
-- [x] n8n-Workflow für Kommunikationsdatenerfassung implementieren
-  - [x] Ticket-Daten aus BigQuery abrufen
-  - [ ] E-Mail-Abfrage aus Gmail implementieren
-  - [ ] Kundenemailadressen aus Leaddaten in BigQuery ermitteln
-  - [x] Mapping von Einsätzen zu relevanten Kommunikationen
-- [x] LLM-Analyse-Workflow in n8n erstellen
-  - [x] Vorverarbeitung der Kommunikationsdaten
-  - [x] Integration mit OpenAI API
-  - [x] Entwicklung des Prompting-Templates für die Kategorisierung
-  - [x] Parsing und Nachbearbeitung der LLM-Ergebnisse
-- [x] Datenspeicherung für die Analyseergebnisse einrichten
-  - [x] Schema für Abbruch- und Beendigungsgründe definiert (in BigQuery-Tabelle)
-  - [x] Speicherort festgelegt: BigQuery-Tabelle `gcpxbixpflegehilfesenioren.Agencyreporter.problematic_stays`
-- [ ] Frontend-Komponenten für "Abbruch-Gründe Analyse" erstellen
-  - [ ] Dashboard-Widget für häufigste Abbruchgründe
-  - [ ] Filtermöglichkeiten nach Zeitraum und Agentur
-  - [ ] Detailansicht für einzelne Abbruchkategorien
-- [ ] Frontend-Komponenten für "Vorzeitige Beendigungs-Gründe" erstellen
-  - [ ] Dashboard-Widget für häufigste Beendigungsgründe
-  - [ ] Vergleichsansicht zwischen Agenturen
-  - [ ] Trend-Analyse über Zeit
+1. **Marktpositionierung und Volumen** - Welche Agenturen dominieren den Markt?
+2. **Leistungseffizienz** - Welche Agenturen arbeiten am effizientesten?
+3. **Qualitätsführerschaft** - Welche Agenturen liefern die höchste Qualität?
+4. **Problemmanagement** - Welche Agenturen bewältigen Probleme am besten?
+5. **Gesamtperformance** - Welche Agenturen sind insgesamt am leistungsstärksten?
 
-### Implementierte n8n-Workflows für Problematic Stays
+## 3. Konzeption und Design des Agenturvergleichsmoduls
 
-Es wurden drei miteinander verknüpfte n8n-Workflows implementiert:
+### 3.1 Hauptbereiche der Agenturvergleichsseite
 
-1. **Workflow 1: Identifikation analysewürdiger Carestays**
-   - Identifiziert zwei Arten problematischer Pflegeeinsätze:
-     - `cancelled_before_arrival`: Abbrüche vor Anreise
-     - `shortened_after_arrival`: Kürzungen laufender Carestays um mehr als 14 Tage
-   - Speichert relevante Metadaten in Supabase-Datenbank
+1. **Übersichts-Dashboard**
+   - Zeigt die Top-3 und Flop-3 Agenturen basierend auf einer konfigurierbaren Gesamtbewertung
+   - Enthält eine Gesamtrangliste mit konfigurierbarer Gewichtung der KPIs
+   - Ermöglicht das Speichern benutzerdefinierter Gewichtungsprofile
 
-2. **Workflow 2: Ticket-Sammlung für jeden Problemfall**
-   - Bei `cancelled_before_arrival`: Tickets ±14 Tage um das Abbruchdatum (event_date)
-   - Bei `shortened_after_arrival`: Tickets während des Aufenthalts (arrival - departure) und 14 Tage danach
-   - Erstellt einen "ticket_dump" pro Carestay
+2. **Marktposition und Volumen**
+   - Horizontales Balkendiagramm mit dem Gesamtvolumen jeder Agentur
+   - Treemap-Visualisierung für Marktanteile
+   - Historische Entwicklung der Marktanteile als Liniendiagramm
 
-3. **Workflow 3: LLM-Analyse und Kategorisierung**
-   - Verwendet unterschiedliche Prompts je nach event_type:
-     - `cancelled_before_arrival`: Prompt für Abbruchgründe vor Anreise
-     - `shortened_after_arrival`: Prompt für Gründe bei vorzeitiger Beendigung nach Anreise
-   - OpenAI-Integration zur Zuordnung zu vordefinierten Gründen
-   - Bewertet Kundenzufriedenheit und Konfidenzniveau
-   - Generiert einen erklärenden Kurzkommentar
+3. **Reaktionsgeschwindigkeit und Effizienz**
+   - Vergleich der durchschnittlichen Reaktionszeiten in verschiedenen Phasen
+   - "Zeit-bis-zur-Reservierung"-Benchmark für alle Agenturen
+   - "Zeit-bis-zur-Personalvorstellung"-Vergleich
 
-4. **Workflow 4: BigQuery-Export**
-   - Überträgt Analyseergebnisse in die BigQuery-Tabelle `gcpxbixpflegehilfesenioren.Agencyreporter.problematic_stays`
-   - Schema enthält alle erforderlichen Felder für die Analyse
+4. **Qualitätsvergleich**
+   - Matrix-Visualisierung von Profilqualitätsmetriken (Verstöße je Kategorie)
+   - Erfüllungsquoten und Abschlussraten im Vergleich
+   - KI-generierte Qualitätsbewertung durch LLM-Analyse
 
-Die KI-Analyse verwendet zwei unterschiedliche Prompt-Templates:
-- Für `cancelled_before_arrival`: Fokus auf Abbruchgründe vor Anreise (z.B. "BK - ohne Grund abgesagt", "BK - hat Verletzung", etc.)
-- Für `shortened_after_arrival`: Fokus auf Gründe für vorzeitige Beendigung (z.B. "BK - Deutschkenntnisse zu schlecht", "BK - Fühlt sich unwohl", etc.)
+5. **Problemmanagement-Vergleich**
+   - Stacked-Bar-Chart für Abbruchgründe nach Agentur
+   - Heatmap der problematischen Einsätze nach Typ und Agentur
+   - Radar-Chart für Problemmanagement-Metriken
 
-Das Ergebnis wird als JSON gespeichert mit folgender Struktur:
-```json
-{
-  "selected_reason": "String (einer der vordefinierten Gründe)",
-  "confidence": "Integer (0-100)",
-  "customer_satisfaction": "String (satisfied/not_satisfied/n/a)",
-  "confidence_cussat": "Integer (0-100)",
-  "comment": "String (10-15 Worte Zusammenfassung)"
-}
-```
+### 3.2 Interaktive Analysefunktionen
 
-## 12. Problematic Stays Analyse-Modul
+1. **Direktvergleich zweier Agenturen**
+   - Side-by-Side-Vergleich aller relevanten Metriken
+   - Hervorhebung signifikanter Unterschiede
+   - Grafische Gegenüberstellung der Stärken und Schwächen
 
-### 12.1 SQL und API-Endpunkte für Problematic Stays
+2. **"Was-wäre-wenn"-Szenarien**
+   - Simulationstool zum Visualisieren von Verbesserungspotenzialen
+   - Zielwert-Definition und Abstandsanalyse zum Branchenbesten
 
-- [ ] **Basisendpunkt für problematische Carestays erstellen**
-  - [ ] SQL-Query für allgemeine Statistiken entwickeln
-  - [ ] API-Route `/api/problematic-stays/overview` implementieren
-  - [ ] Parameter für Zeitraum- und Agenturfilterung einbauen
+3. **Trendanalyse-Tools**
+   - Interaktives Liniendiagramm zur Anzeige der zeitlichen Entwicklung wichtiger KPIs
+   - Vergleich mehrerer Agenturen über verschiedene Zeitperioden
 
-- [ ] **Endpunkte für spezifische Analysen erstellen**
-  - [ ] `/api/problematic-stays/by-event-type`: Abbrüche vor/nach Anreise aufschlüsseln
-  - [ ] `/api/problematic-stays/by-stay-type`: First-Stay vs. Follow-Stay analysieren
-  - [ ] `/api/problematic-stays/time-analysis`: Zeitliche Analysen (Tage bis Abbruch/Vorlaufzeit)
-  - [ ] `/api/problematic-stays/replacement-analysis`: Ersatz- und Folgeanalyse
-  - [ ] `/api/problematic-stays/reasons`: Häufigste Gründe, extrahiert aus analysis_result
-  - [ ] `/api/problematic-stays/customer-satisfaction`: Kundenzufriedenheitsanalyse
+### 3.3 Visualisierungsansätze für wichtige Metriken
 
-- [ ] **SQL-Views optimieren**
-  - [ ] JSON-Extraktion für analysis_result-Felder im SQL implementieren
-  - [ ] Berechnungen für Prozentsätze und Verhältniswerte optimieren
-  - [ ] Performanzoptimierung für Zeitreihenabfragen
+| Metrik | Visualisierungstyp | API-Endpoint |
+|--------|-------------------|--------------|
+| Gesamtvolumen | Horizontales Balkendiagramm | `/api/kpis/filter` |
+| Marktanteile | Treemap oder Donut-Chart | `/api/kpis/filter` |
+| Problematische Einsätze | Heatmap | `/api/problematic_stays/heatmap` |
+| Reaktionszeiten | Grouped Bar Chart | `/api/reaction_times/filter` |
+| Abbruchgründe | Stacked Bar Chart | `/api/problematic_stays/reasons` |
+| Qualitätsmetriken | Radar-Chart | `/api/profile_quality/filter` |
+| Gesamtbewertung | Sortierbare Tabelle mit Mikro-Sparklines | Aggregiert aus mehreren Endpoints |
+| Zehn-Wochen-Trend | Small Multiples Liniendiagramm | `/api/problematic_stays/trend-analysis` |
+| Stärken/Schwächen | Butterfly-Chart | `/api/llm_analysis/{agency_id}/strength-weakness` |
 
-### 12.2 Frontend-Implementierung für Problematic Stays
+## 4. Implementierungsroadmap
 
-- [ ] **Übersichtsseite für Problematic Stays erstellen**
-  - [ ] Layout mit KPI-Kacheln und Filteroptionen entwerfen
-  - [ ] Schnittstelle zur API implementieren
-  - [ ] Responsive Design für verschiedene Bildschirmgrößen
+### 4.1 Phase 1: Grundlegende Vergleichsansicht (Kurzfristig)
 
-- [ ] **KPI-Widgets für quantitative Analyse erstellen**
-  - [ ] Widget für Gesamtverhältnis problematischer Einsätze
-  - [ ] Widget für Abbruchquote vor Anreise
-  - [ ] Widget für Verkürzungsquote nach Anreise
-  - [ ] Vergleichsansicht mit Durchschnitt/historischen Daten
+- [x] **Scrollbare Listen aller Agenturen nach verschiedenen Metriken**
+   - [x] Implementierung eines scrollbaren `AgencyRankingList`-Components
+   - [x] Integration der relevanten API-Endpoints
+   - [x] Styling und UI-Verbesserungen
 
-- [ ] **Charts für zeitliche Analyse implementieren**
-  - [ ] Balkendiagramm für durchschnittliche Verkürzung/Vorlaufzeit
-  - [ ] Tortendiagramm für Einsätze mit sehr frühem Ende (<10 Tage)
-  - [ ] Zeitreihendiagramm für Entwicklung über Zeit
+- [ ] **Erweiterter Vergleichsdaten-Abruf**
+   - [ ] Implementierung eines Batch-Abrufs für alle benötigten API-Endpoints
+   - [ ] Caching-Mechanismen für Vergleichsdaten
+   - [ ] Progressives Laden der Daten mit visuellen Lade-Indikatoren
 
-- [ ] **Visualisierungen für Ursachenanalyse erstellen**
-  - [ ] Heatmap: Verteilung der Gründe nach Agenturen
-  - [ ] Balkendiagramm: Top 5 Gründe nach Einsatztyp
-  - [ ] Tortendiagramm: Kundenzufriedenheitsverteilung
+- [ ] **Verbesserte Navigations- und Filteroptionen**
+   - [ ] Implementierung konfigurierbarer Filter für alle Listen
+   - [ ] Speichern von Filtereinstellungen im App-State
+   - [ ] "Vergleichen"-Funktion für ausgewählte Agenturen hinzufügen
 
-- [ ] **Detailansicht für einzelne problematische Carestays**
-  - [ ] Tabelle mit Suchfunktion für individuelle Carestays
-  - [ ] Detail-Modal mit vollständigen Informationen inkl. Kommentar
-  - [ ] Export-Funktionalität für Rohdaten
+### 4.2 Phase 2: Erweiterte Visualisierungen (Mittelfristig)
 
-### 12.3 Spezialberichte und Drilldown-Funktionen
+- [ ] **Implementierung der Kernvisualierungen**
+   - [ ] Heatmap für Problemverteilung nach Agentur
+   - [ ] Marktanteil-Treemap für Volumenvisualisierung
+   - [ ] Radar-Charts für multidimensionale KPI-Vergleiche
+   - [ ] Reaktionszeit-Vergleichsdiagramme
 
-- [ ] **Spezialberichte für Management implementieren**
-  - [ ] "Problemagenturen"-Bericht mit Ranking nach Problemhäufigkeit
-  - [ ] "Frühabbrecher"-Bericht (Fokus auf <10 Tage Einsatzlänge)
-  - [ ] "Ersatz-Effizienz"-Bericht (Analyse der Ersatzbereitstellung)
+- [ ] **Detailvergleichsansichten**
+   - [ ] Side-by-Side-Vergleich zweier ausgewählter Agenturen
+   - [ ] Trendlinien für wichtige KPIs
+   - [ ] Detail-Drilldowns für spezifische Metriken
 
-- [ ] **Drilldown-Funktionen für Analysten**
-  - [ ] Interaktive Filterung nach allen relevanten Parametern
-  - [ ] Dynamische Chartgenerierung basierend auf Filterauswahl
-  - [ ] Exportmöglichkeiten für weiterführende Analysen
+- [ ] **UI/UX-Optimierungen**
+   - [ ] Einheitliches Design für alle Visualisierungen
+   - [ ] Responsive Anpassungen für verschiedene Bildschirmgrößen
+   - [ ] Tooltip- und Interaktionsmechanismen verbessern
 
-- [ ] **Dashboard-Integration**
-  - [ ] Wichtigste KPIs in bestehende Dashboards integrieren
-  - [ ] Toggle für tiefergehende Analyse hinzufügen
-  - [ ] Konsistente Designsprache sicherstellen
+### 4.3 Phase 3: Fortgeschrittene Analyse-Features (Langfristig)
 
-## Gefundene und behobene Probleme (in chronologischer Reihenfolge)
+- [ ] **Implementierung der Gesamtbewertung**
+   - [ ] Entwicklung eines gewichteten Scoring-Systems
+   - [ ] UI für die Anpassung der Gewichtungen
+   - [ ] Speichern und Laden von Bewertungsprofilen
 
-- **28.06.2024 - Korrektur der Personalvorschläge-Zählung**: 
-  Die `GET_PV_COUNT`-Abfrage wurde geändert, um nur einzigartige Stellenausschreibungen mit Personalvorschlägen zu zählen (`COUNT(DISTINCT v.posting_id)`) anstatt alle Personalvorschläge.
+- [ ] **"Was-wäre-wenn"-Analysetools**
+   - [ ] UI zur Definition von Zielwerten
+   - [ ] Visualisierung von Verbesserungspotenzialen
+   - [ ] Vergleichsanalyse mit Best Practices
 
-- **28.06.2024 - Präzisierung der Pipeline-Übersicht**: 
-  Die "Angetretene Einsätze" wurden zu "Angetretene Ersteinsätze" präzisiert, um klarzustellen, dass nur first_stays (is_swap = "false") in der Fortschrittskette berücksichtigt werden, nicht alle Einsätze.
+- [ ] **Performance-Optimierungen**
+   - [ ] Verbessertes Daten-Caching
+   - [ ] Lazy Loading von komplexen Visualisierungen
+   - [ ] Backend-Unterstützung für aggregierte Daten
 
-- **28.06.2024 - Verbesserte Definition der "Abgeschlossene Einsätze"**: 
-  Die `GET_COMPLETED_CARE_STAYS`-Abfrage wurde optimiert, um auch Verlängerungen und leichte Verkürzungen des Abreisedatums (bis zu 14 Tage) als erfolgreich abgeschlossen zu werten. Nur starke Verkürzungen werden als nicht erfolgreich betrachtet.
+## 5. Detaillierte Anforderungen an Visualisierungen
 
-- **28.06.2024 - Korrektur der Prozentberechnung in "Erfolgsschritte im Prozess"**:
-  Die Prozentberechnung für "Einsatz vollständig durchgezogen" wurde korrigiert, sodass sie sich auf "Angetretene Ersteinsätze" bezieht und nicht auf eine vorhergehende Stufe.
+### 5.1 Marktanteil und Volumen
 
-- **28.06.2024 - Identifikation des Problems mit fehlendem Balken**:
-  Es wurde festgestellt, dass im "Erfolgsschritte im Prozess"-Diagramm der Balken für "Einsatz vollständig durchgezogen" nicht angezeigt wird, obwohl die Daten korrekt vorbereitet werden. Eine Debug-Anzeige wurde hinzugefügt, um die tatsächlichen Werte anzuzeigen und eine Lösung zu finden.
+**Treemap-Visualisierung der Marktanteile**
+- **Datenquelle**: `/api/kpis/filter` zur Berechnung der Marktanteile basierend auf Gesamteinsätzen
+- **Beantwortete Frage**: Wie ist die Größenverteilung der Agenturen im Markt?
+- **Umsetzung**: Rechtecke proportional zum Marktanteil; Farbkodierung nach Effizienz (z.B. Verhältnis erfolgreicher Einsätze)
+- **Interaktivität**: Hover für detaillierte Informationen, Klick für Agenturdetails
 
-- **29.06.2024 - Implementierung eines Einsatztyp-Filters**:
-  Ein Dropdown-Menü wurde zur Pipeline-Übersicht hinzugefügt, das zukünftig erlaubt, zwischen "Nur Ersteinsätzen", "Nur Wechseleinsätzen" und "Gesamt" zu filtern. Die Funktionalität ist als "In Entwicklung" gekennzeichnet und wird in einem späteren Update vollständig implementiert.
+**Horizontales Balkendiagramm für Gesamteinsätze**
+- **Datenquelle**: `/api/kpis/filter` für absolute Zahlen der Einsätze
+- **Beantwortete Frage**: Welche Agenturen haben das höchste Volumen?
+- **Umsetzung**: Sortierte Balken mit absoluten Zahlen und prozentualen Anteilen
+- **Interaktivität**: Sortierung nach verschiedenen Zeiträumen (Quartal, Jahr, Gesamt)
 
-- **08.07.2024 - Implementierung des variablen Vergleichswerts**:
-  Ein Dropdown-Menü wurde hinzugefügt, mit dem der Benutzer zwischen verschiedenen Vergleichswerten wählen kann: "Mit Durchschnitt" (Standard), "Mit sich selbst" (historischer Vergleich) und "Mit anderer Agentur". Entsprechende API-Funktionen wurden implementiert und die UI wurde angepasst, um die Auswahl unterschiedlicher Vergleichsparameter zu ermöglichen.
+### 5.2 Effizienz- und Reaktionszeitvergleich
 
-- **09.07.2024 - Implementierung des historischen Vergleichs**:
-  Der historische Vergleich wurde implementiert, indem auf den gleichen API-Endpunkt mit einem unterschiedlichen Zeitraumparameter zugegriffen wird. Da das Backend derzeit nur begrenzte Zeitraumparameter unterstützt, wird temporär 'last_year' als Parameter für alle historischen Vergleiche verwendet. Die UI wurde angepasst, um zwischen "Vorquartal", "Vorjahr" und "Letzte 6 Monate" auszuwählen und die entsprechenden Vergleichsdaten anzuzeigen.
+**Multi-Metrik-Vergleichsdiagramm für Reaktionszeiten**
+- **Datenquelle**: `/api/reaction_times/filter` für verschiedene Zeitmetriken
+- **Beantwortete Frage**: Welche Agenturen reagieren am schnellsten in welchen Prozessschritten?
+- **Umsetzung**: Grouped Bar Chart mit verschiedenen Zeitkategorien pro Agentur
+- **Zusatzinfo**: Branchendurchschnitt als Referenzlinie
 
-## 13. Implementierung des Problematic Stays Dashboards
+**Prozesseffizienz-Trendlinien**
+- **Datenquelle**: `/api/reaction_times/filter` mit historischen Daten
+- **Beantwortete Frage**: Verbessern sich Agenturen in ihrer Reaktionsgeschwindigkeit?
+- **Umsetzung**: Small Multiples für Top-5-Agenturen mit Trendlinien
+- **Strategische Erkenntnis**: Identifikation systematischer Verbesserungen oder Verschlechterungen
 
-### 13.1 Frontend-Komponenten für das Übersichtsdashboard
-- [x] **Hauptstatistik-Widget erstellen**
-  - [x] Komponente für KPI-Kacheln entwickeln (Gesamtzahl problematischer Einsätze, Abbrüche vor Anreise, vorzeitige Beendigungen, sofortige Abreisen)
-  - [x] Vergleichswerte zum Durchschnitt/Vorperiode hinzufügen
-  - [x] Trend-Indikatoren (Pfeile) für Entwicklung implementieren
-  - [x] Mit `/api/problematic_stays/overview` API-Endpunkt verbinden
-  - [x] Filter für Zeitraum implementieren
+### 5.3 Qualitäts- und Problemmanagement
 
-- [x] **Verteilungsdiagramm erstellen**
-  - [x] Säulendiagramm zur Darstellung der Verteilung nach Problemtyp und Einsatztyp
-  - [x] Farbliche Differenzierung zwischen first_stay und follow_stay
-  - [x] Tooltip mit detaillierten Informationen
-  - [x] Mit `/api/problematic_stays/overview` API-Endpunkt verbinden
-  - [x] Responsive Design für verschiedene Bildschirmgrößen
+**Heatmap der problematischen Einsätze**
+- **Datenquelle**: `/api/problematic_stays/heatmap`
+- **Beantwortete Frage**: Wo liegen die Hauptproblembereiche jeder Agentur?
+- **Umsetzung**: Farbkodierte Matrix mit Agenturen in Zeilen und Problemtypen in Spalten
+- **Strategische Erkenntnis**: Muster in den Problemarten nach Agentur identifizieren
 
-### 13.2 Widgets für zeitliche Analyse
-- [x] **Vorlaufzeit-Analyse-Widget erstellen**
-  - [x] Box-Plot oder ähnliches Diagramm zur Darstellung der Vorlaufzeit bei Abbrüchen
-  - [x] Durchschnittslinie implementieren
-  - [x] Mit `/api/problematic_stays/time-analysis` API-Endpunkt verbinden
-  - [x] Filter für event_type="cancelled_before_arrival" implementieren
+**Abbruchgründe-Vergleich**
+- **Datenquelle**: `/api/problematic_stays/reasons` für verschiedene Agenturen
+- **Beantwortete Frage**: Unterscheiden sich die Hauptgründe für Abbrüche zwischen Agenturen?
+- **Umsetzung**: Grouped oder Stacked Bar Chart mit Top-5-Gründen pro Agentur
+- **Zusatzinfo**: Vergleich zu Branchendurchschnitt
 
-- [x] **Verkürzungsdauer-Analyse-Widget erstellen**
-  - [x] Diagramm zur Darstellung der Verkürzungsdauer
-  - [x] Markierung kritischer Bereiche (>30 Tage)
-  - [x] Mit `/api/problematic_stays/time-analysis` API-Endpunkt verbinden
-  - [x] Filter für event_type="shortened_after_arrival" implementieren
+**Kundenzufriedenheits-Vergleich**
+- **Datenquelle**: `/api/problematic_stays/customer-satisfaction`
+- **Beantwortete Frage**: Welche Agenturen halten Kundenzufriedenheit trotz Probleme hoch?
+- **Umsetzung**: Horizontal Bullet Chart mit Zielbereichen
+- **Strategische Erkenntnis**: Identifikation von Best Practices im Kundenbeziehungsmanagement
 
-- [x] **Sofortige-Abreise-Widget erstellen**
-  - [x] Balkendiagramm für Einsätze mit sofortiger Abreise (<10 Tage)
-  - [x] Filtern der Daten für instant_departure_after IS NOT NULL
-  - [x] Gruppierung nach Tagen (1-9)
-  - [x] Mit `/api/problematic_stays/overview` oder spezieller Abfrage verbinden
+### 5.4 Gesamtperformance und strategische Bewertung
 
-### 13.3 Widgets für Ersatz- und Folgeanalyse
-- [ ] **Ersatzbereitstellungs-Widget erstellen**
-  - [ ] Donut-Chart zur Darstellung der Ersatzbereitstellung
-  - [ ] KPI zur Anzeige der Ersatzbereitstellungsquote
-  - [ ] Vergleich mit Durchschnitt
-  - [ ] Mit `/api/problematic_stays/overview` API-Endpunkt verbinden
+**Konfigurierbare Gesamtrangliste**
+- **Datenquelle**: Aggregiert aus mehreren Endpoints
+- **Beantwortete Frage**: Welche Agenturen performen insgesamt am besten?
+- **Umsetzung**: Interaktive Tabelle mit Mikro-Sparklines und konfigurierbaren Gewichtungen
+- **Interaktivität**: Drag-and-Drop-UI für Gewichtungsanpassung
 
-- [ ] **Folgeeinsatz-Analyse-Widget erstellen**
-  - [ ] Donut-Chart zur Darstellung der Folgeeinsätze
-  - [ ] KPI zur Anzeige der Folgeeinsatzquote
-  - [ ] Vergleich mit Durchschnitt
-  - [ ] Mit `/api/problematic_stays/overview` API-Endpunkt verbinden
+**Stärken-Schwächen-Vergleich ausgewählter Agenturen**
+- **Datenquelle**: `/api/llm_analysis/{agency_id}/strength-weakness` für mehrere Agenturen
+- **Beantwortete Frage**: Wo liegen komparative Vor- und Nachteile spezifischer Agenturen?
+- **Umsetzung**: Side-by-Side-Vergleich mit visueller Hervorhebung der Differenzen
+- **Strategische Erkenntnis**: Möglichkeiten für Best-Practice-Transfer identifizieren
 
-### 13.4 Widgets für Ursachenanalyse
-- [ ] **Widget für Abbruchgründe erstellen**
-  - [ ] Horizontales Balkendiagramm für die Top 5 Gründe
-  - [ ] Vergleich mit Durchschnitt aller Agenturen
-  - [ ] Mit `/api/problematic_stays/reasons` API-Endpunkt verbinden
-  - [ ] Filter für event_type="cancelled_before_arrival" implementieren
+## 6. Strategische Erkenntnisse durch integrierte Analyse
 
-- [ ] **Widget für Beendigungsgründe erstellen**
-  - [ ] Horizontales Balkendiagramm für die Top 5 Gründe
-  - [ ] Vergleich mit Durchschnitt aller Agenturen
-  - [ ] Mit `/api/problematic_stays/reasons` API-Endpunkt verbinden
-  - [ ] Filter für event_type="shortened_after_arrival" implementieren
+Die Kombination verschiedener Metriken und Visualisierungen ermöglicht tiefgreifende strategische Erkenntnisse:
 
-- [ ] **Kundenzufriedenheits-Widget erstellen**
-  - [ ] Donut-Chart zur Darstellung der Kundenzufriedenheit
-  - [ ] Segmente für zufrieden/unzufrieden/neutral
-  - [ ] Mit `/api/problematic_stays/overview` oder spezieller Abfrage verbinden
-  - [ ] Filter nach Problemtyp und Grund implementieren
+1. **Qualität vs. Volumen**
+   - Korrelation zwischen Agenturgrößen und Qualitätsmetriken visualisieren
+   - Beantwortete Frage: Gibt es einen "Sweet Spot" für optimale Agenturgrößen?
 
-- [ ] **Heatmap für Gründe nach Agenturen erstellen**
-  - [ ] Matrix mit Agenturen auf X-Achse und Gründen auf Y-Achse
-  - [ ] Farbskala zur Darstellung der Häufigkeit
-  - [ ] Mit `/api/problematic_stays/reasons` API-Endpunkt verbinden
-  - [ ] Tooltip mit detaillierten Informationen
+2. **Spezialisierungsmuster**
+   - Erkennung von Agenturen mit außergewöhnlichen Leistungen in bestimmten Kategorien
+   - Beantwortete Frage: Welche Agenturen haben besondere Stärken in spezifischen Bereichen?
 
-### 13.5 Zeitreihenanalyse-Widgets
-- [ ] **Entwicklungs-Widget über Zeit erstellen**
-  - [ ] Liniendiagramm zur Darstellung der monatlichen Entwicklung
-  - [ ] Mehrere Linien für verschiedene Problemtypen
-  - [ ] Mit `/api/problematic_stays/time-analysis` API-Endpunkt verbinden
-  - [ ] Option zum Vergleich mit Vorjahr
+3. **Systematische Schwachstellen**
+   - Identifikation von Problemmustern, die über mehrere Agenturen hinweg bestehen
+   - Beantwortete Frage: Welche Probleme sind systemischer Natur vs. agenturspezifisch?
 
-### 13.6 Detailtabelle und Dashboard-Integration
-- [ ] **Detailtabelle für Einzelfallansicht erstellen**
-  - [ ] Interaktive Tabelle mit filterbaren Einsätzen
-  - [ ] Erweiterbare Zeilen für Details
-  - [ ] Mit `/api/problematic_stays/{agency_id}/detailed` API-Endpunkt verbinden
-  - [ ] Pagination und Suchfunktion
+4. **Best Practice Transfer**
+   - Agentur-übergreifende Lernmöglichkeiten basierend auf Leistungsunterschieden
+   - Beantwortete Frage: Welche erfolgreichen Prozesse könnten auf andere Agenturen übertragen werden?
 
-- [ ] **Dashboard-Integration**
-  - [ ] Layout für das gesamte Dashboard erstellen
-  - [ ] Dashboard-Seite zur Navigation hinzufügen
-  - [ ] Responsive Design für verschiedene Bildschirmgrößen
-  - [ ] Export-Funktionalität (PDF, CSV) implementieren
-  - [ ] Filter-Leiste für globale Filterung nach Agentur, Zeitraum, etc.
+5. **Frühwarnindikatoren**
+   - Korrelationen zwischen frühen Warnsignalen und späteren Problemen
+   - Beantwortete Frage: Welche Frühindikatoren sagen zukünftige Probleme voraus?
 
-### 13.7 Qualitätssicherung und Dokumentation
-- [ ] **Tests schreiben**
-  - [ ] Unit-Tests für API-Aufrufe
-  - [ ] Komponentententests für Visualisierungen
-  - [ ] End-to-End-Tests für Dashboard
+## 7. Nächste konkrete Umsetzungsschritte
 
-- [ ] **Dokumentation aktualisieren**
-  - [ ] README.md mit Beschreibung der neuen Funktionalität
-  - [ ] API-Dokumentation für neue Endpunkte
-  - [ ] Benutzerhandbuch mit Screenshots und Erklärungen
+1. [ ] **Erweiterte Datenintegration**
+   - [ ] Implementierung eines kombinierten API-Abrufs für konsistente Agenturlisten
+   - [ ] Entwicklung eines Datenstruktur-Mappers für die Vereinheitlichung von Agenturvergleichsdaten
+   - [ ] Caching-Mechanismen für schnellere Darstellung und reduzierte API-Last
 
-- [ ] **Performance-Optimierung**
-  - [ ] Caching für API-Antworten implementieren
-  - [ ] Lazy Loading für Dashboard-Komponenten
-  - [ ] Memoization für rechenintensive Operationen
+2. [ ] **Core Visualisierungskomponenten**
+   - [ ] Erstellung einer responsiven `AgencyHeatmap`-Komponente
+   - [ ] Entwicklung einer interaktiven `MarketShareTreemap`-Komponente
+   - [ ] Implementierung einer konfigurierbaren `PerformanceRadarChart`-Komponente
+   - [ ] Entwicklung eines wiederverwendbaren `SideBySideComparison`-Layouts
 
-### 13.8 UI/UX-Verbesserungen
-- [x] **Hierarchische Darstellung der Übersichtswidgets** (20.05.2025)
-  - [x] Hauptkennzahl "Problematische Einsätze" visuell hervorheben
-  - [x] Verdeutlichung der hierarchischen Beziehung zwischen KPIs durch Layout und Farbkodierung
-  - [x] "Abbrüche vor Anreise" und "Vorzeitige Beendigungen" als Hauptkategorien darstellen
-  - [x] "Sofortige Abreisen (<10 Tage)" als Teilmenge von "Vorzeitige Beendigungen" visualisieren
-  - [x] Erklärende Elemente mit passender visueller Zuordnung darstellen
-  - [x] "Kundenzufriedenheit" als Outcome aller problematischen Einsätze zentriert platzieren
-  - [x] Responsive Anpassung des hierarchischen Layouts für verschiedene Bildschirmgrößen
-  - [x] Hauptkennzahl mit einzigartiger Farbgebung (Smaragd/Türkis-Farbverlauf) hervorheben (20.05.2025)
-  - [x] Alle Widget-Inhalte zentriert statt linksbündig ausrichten (20.05.2025)
-  - [x] Berechnung der Prozentwerte auf Basis der problematischen Einsätze statt aller Einsätze (20.05.2025)
-    - [x] Aussagekraft der Widgets verbessert, um Verteilung innerhalb der Problemfälle zu zeigen
-    - [x] Beschreibungstexte angepasst auf "% aller probl. Einsätze"
-  - [x] Verbesserte Darstellung der Kundenzufriedenheit mit Donut-Chart (20.05.2025)
-    - [x] Intuitive visuelle Darstellung mit farbcodierten Segmenten (grün/rot)
-    - [x] Klare Legende zur Unterscheidung zwischen zufriedenen und unzufriedenen Kunden
-    - [x] Präzisere Beschreibung: "sind trotz Problemen zufrieden"
-    - [x] Absolute Zahlen zur besseren Nachvollziehbarkeit hinzugefügt
-  - [x] Redundantes Agentur-Dropdown-Menü entfernt (20.05.2025)
-    - [x] Vermeidung von Doppelungen in der Benutzeroberfläche
-    - [x] Klarere Seitenstruktur durch Reduzierung auf ein Auswahlmenü
+3. [ ] **UI-Elemente für Benutzerinteraktion**
+   - [ ] Gewichtungs-Konfigurator für die Gesamtbewertung
+   - [ ] Filter- und Auswahl-UI für gezielte Agenturvergleiche
+   - [ ] Speichern und Laden von Benutzereinstellungen
 
-- [ ] **Navigation und Filterung verbessern**
-  - [ ] Sticky-Header für Filter implementieren
-  - [ ] Breadcrumbs zur einfacheren Navigation hinzufügen
-  - [ ] Filter-Presets für häufige Analyseszenarien
+4. [ ] **Integration in bestehende App-Struktur**
+   - [ ] Erweiterung des App-States für Vergleichsmetriken und -einstellungen
+   - [ ] Entwicklung einer Tab-Struktur für die verschiedenen Vergleichsaspekte
+   - [ ] Export-Funktionalität für Berichte und Rohdaten
+
+5. [ ] **Performance-Optimierungen**
+   - [ ] Lazy Loading für komplexe Visualisierungen
+   - [ ] Responsive Anpassung der Diagrammkomplexität
+   - [ ] Daten-Pagination für umfangreiche Vergleichslisten

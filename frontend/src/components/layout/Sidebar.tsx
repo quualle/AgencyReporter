@@ -128,6 +128,21 @@ const Sidebar: React.FC = () => {
                 <sup className="text-[8px] font-normal text-yellow-600 ml-0.5">In Entwicklung</sup>
               </Link>
             </li>
+            <li>
+              <Link 
+                to="/agency-comparison"
+                className={`flex items-center px-4 py-2 rounded-md ${
+                  isActive('/agency-comparison') 
+                    ? 'bg-primary-50 text-primary-600 dark:bg-primary-900 dark:text-primary-300' 
+                    : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'
+                }`}
+              >
+                <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                </svg>
+                Agenturvergleich
+              </Link>
+            </li>
           </ul>
         </nav>
         

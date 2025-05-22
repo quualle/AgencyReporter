@@ -21,6 +21,19 @@ const api = axios.create({
   }
 });
 
+// Cache for API responses
+interface CacheEntry {
+  data: any;
+  timestamp: string;
+  expiry: number;
+}
+
+interface ApiCache {
+  [key: string]: CacheEntry;
+}
+
+const apiCache: ApiCache = {};
+
 // Types
 export interface Agency {
   agency_id: string;
@@ -58,6 +71,85 @@ export const apiService = {
   getAgency: async (id: string): Promise<Agency> => {
     const response = await api.get(`/agencies/${id}`);
     return response.data;
+  },
+  
+  // Agency Comparison Data
+  getAgencyComparisonData: async (timePeriod: string = 'last_quarter', forceRefresh: boolean = false): Promise<any> => {
+    // Create a cache key based on the parameters
+    const cacheKey = `agencyComparisonData_${timePeriod}`;
+    
+    // Cache expiry time (15 minutes = 900000 milliseconds)
+    const CACHE_EXPIRY = 15 * 60 * 1000;
+    
+    // Check if we have cached data and it's not expired and not forcing refresh
+    if (!forceRefresh && apiCache[cacheKey] && apiCache[cacheKey].expiry > Date.now()) {
+      console.log('Using cached data for agency comparison:', timePeriod);
+      return apiCache[cacheKey].data;
+    }
+    
+    try {
+      console.log('Fetching fresh data for agency comparison:', timePeriod);
+      
+      // Handle APIs that might not be fully implemented yet
+      const fetchWithFallback = async (url: string) => {
+        try {
+          const response = await api.get(url);
+          return response;
+        } catch (err) {
+          console.warn(`API endpoint ${url} failed, using fallback data`, err);
+          // Return empty data as fallback
+          return { data: { data: [] } };
+        }
+      };
+      
+      // Create promises for all required endpoints
+      const promises = [
+        // Basic problematic stays overview
+        fetchWithFallback(`/problematic_stays/overview?time_period=${timePeriod}`),
+        
+        // Reaction times for all agencies - this one is not fully implemented yet
+        fetchWithFallback(`/problematic_stays/overview?time_period=${timePeriod}`), // Use overview as fallback
+        
+        // Profile quality for all agencies - this one is not fully implemented yet
+        fetchWithFallback(`/problematic_stays/overview?time_period=${timePeriod}`), // Use overview as fallback
+        
+        // Problematic stays heatmap
+        fetchWithFallback(`/problematic_stays/heatmap?time_period=${timePeriod}`),
+      ];
+      
+      // Execute all promises concurrently
+      const results = await Promise.all(promises);
+      
+      // Extract data from responses
+      const responseData = {
+        problematicStaysOverview: results[0].data,
+        reactionTimes: { data: [] }, // Empty data for now
+        profileQuality: { data: [] }, // Empty data for now
+        problematicStaysHeatmap: results[3].data,
+        timestamp: new Date().toISOString(),
+      };
+      
+      // Save to cache
+      apiCache[cacheKey] = {
+        data: responseData,
+        timestamp: new Date().toISOString(),
+        expiry: Date.now() + CACHE_EXPIRY
+      };
+      
+      return responseData;
+    } catch (error) {
+      console.error('Error fetching agency comparison data:', error);
+      
+      // Return empty data structure with all required properties
+      return {
+        problematicStaysOverview: { data: [] },
+        reactionTimes: { data: [] },
+        profileQuality: { data: [] },
+        problematicStaysHeatmap: { data: [] },
+        timestamp: new Date().toISOString(),
+        error: true
+      };
+    }
   },
 
   // Quotas (KPIs)
