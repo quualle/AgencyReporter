@@ -210,7 +210,7 @@ export const apiService = {
   ): Promise<any> => {
     try {
       // Überprüfen, ob der Zeitraum gültig ist
-      const validTimePeriods = ['last_quarter', 'last_month', 'last_year', 'all_time', 'current_quarter', 'current_month', 'current_year'];
+      const validTimePeriods = ['last_quarter', 'last_month', 'last_year', 'all_time'];
       
       if (validTimePeriods.includes(timePeriod)) {
         // Cache-Schlüssel erstellen
@@ -326,8 +326,28 @@ export const apiService = {
     }
   },
 
-  getCancellationBeforeArrivalRate: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+  getCancellationBeforeArrivalRate: async (
+    id: string, 
+    timePeriod: string = 'last_quarter',
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
+    // Cache-Schlüssel erstellen
+    const cacheKey = cacheHelper.createCacheKey(`quotas/${id}/cancellation-before-arrival`, { time_period: timePeriod });
+    
+    // Prüfen, ob Daten im Cache sind
+    if (!forceRefresh) {
+      const cachedData = cacheHelper.getFromCache(cacheKey);
+      if (cachedData) {
+        return cachedData;
+      }
+    }
+    
     const response = await api.get(`/quotas/${id}/cancellation-before-arrival?time_period=${timePeriod}`);
+    
+    // Speichere Daten im Cache
+    cacheHelper.saveToCache(cacheKey, response.data, useExtendedCache);
+    
     return response.data;
   },
 
@@ -369,8 +389,28 @@ export const apiService = {
     const response = await api.get(`/reaction_times/${id}/proposal_to_cancellation?time_period=${timePeriod}`);
     return response.data;
   },
-  getArrivalToCancellationStats: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+  getArrivalToCancellationStats: async (
+    id: string, 
+    timePeriod: string = 'last_quarter',
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
+    // Cache-Schlüssel erstellen
+    const cacheKey = cacheHelper.createCacheKey(`reaction_times/${id}/arrival_to_cancellation`, { time_period: timePeriod });
+    
+    // Prüfen, ob Daten im Cache sind
+    if (!forceRefresh) {
+      const cachedData = cacheHelper.getFromCache(cacheKey);
+      if (cachedData) {
+        return cachedData;
+      }
+    }
+    
     const response = await api.get(`/reaction_times/${id}/arrival_to_cancellation?time_period=${timePeriod}`);
+    
+    // Speichere Daten im Cache
+    cacheHelper.saveToCache(cacheKey, response.data, useExtendedCache);
+    
     return response.data;
   },
 
@@ -391,8 +431,27 @@ export const apiService = {
     const response = await api.get(`/reaction_times/stats/overall/arrival_to_cancellation?time_period=${timePeriod}`);
     return response.data;
   },
-  getOverallCancellationBeforeArrivalStats: async (timePeriod: string = 'last_quarter'): Promise<any> => {
+  getOverallCancellationBeforeArrivalStats: async (
+    timePeriod: string = 'last_quarter',
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
+    // Cache-Schlüssel erstellen
+    const cacheKey = cacheHelper.createCacheKey(`quotas/stats/overall/cancellation-before-arrival`, { time_period: timePeriod });
+    
+    // Prüfen, ob Daten im Cache sind
+    if (!forceRefresh) {
+      const cachedData = cacheHelper.getFromCache(cacheKey);
+      if (cachedData) {
+        return cachedData;
+      }
+    }
+    
     const response = await api.get(`/quotas/stats/overall/cancellation-before-arrival?time_period=${timePeriod}`);
+    
+    // Speichere Daten im Cache
+    cacheHelper.saveToCache(cacheKey, response.data, useExtendedCache);
+    
     return response.data;
   },
 
@@ -471,13 +530,53 @@ export const apiService = {
   },
 
   // Quotas with Reasons
-  getAgencyEarlyEndReasons: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+  getAgencyEarlyEndReasons: async (
+    id: string, 
+    timePeriod: string = 'last_quarter',
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
+    // Cache-Schlüssel erstellen
+    const cacheKey = cacheHelper.createCacheKey(`quotas_with_reasons/${id}/early-end-reasons`, { time_period: timePeriod });
+    
+    // Prüfen, ob Daten im Cache sind
+    if (!forceRefresh) {
+      const cachedData = cacheHelper.getFromCache(cacheKey);
+      if (cachedData) {
+        return cachedData;
+      }
+    }
+    
     const response = await api.get(`/quotas_with_reasons/${id}/early-end-reasons?time_period=${timePeriod}`);
+    
+    // Speichere Daten im Cache
+    cacheHelper.saveToCache(cacheKey, response.data, useExtendedCache);
+    
     return response.data;
   },
 
-  getAgencyCancellationReasons: async (id: string, timePeriod: string = 'last_quarter'): Promise<any> => {
+  getAgencyCancellationReasons: async (
+    id: string, 
+    timePeriod: string = 'last_quarter',
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
+    // Cache-Schlüssel erstellen
+    const cacheKey = cacheHelper.createCacheKey(`quotas_with_reasons/${id}/cancellation-reasons`, { time_period: timePeriod });
+    
+    // Prüfen, ob Daten im Cache sind
+    if (!forceRefresh) {
+      const cachedData = cacheHelper.getFromCache(cacheKey);
+      if (cachedData) {
+        return cachedData;
+      }
+    }
+    
     const response = await api.get(`/quotas_with_reasons/${id}/cancellation-reasons?time_period=${timePeriod}`);
+    
+    // Speichere Daten im Cache
+    cacheHelper.saveToCache(cacheKey, response.data, useExtendedCache);
+    
     return response.data;
   },
 
@@ -655,8 +754,8 @@ export const preloadService = {
     };
 
     try {
-      // Definiere alle zu ladenden Zeiträume (mehr Zeiträume für bessere Abdeckung)
-      const timePeriods = ['last_quarter', 'current_quarter', 'last_year', 'current_year', 'last_month', 'current_month'];
+      // Definiere alle zu ladenden Zeiträume (nur Backend-kompatible Zeiträume)
+      const timePeriods = ['last_quarter', 'last_year', 'last_month', 'all_time'];
       
       // Alle Agenturen laden (wird für Vergleiche benötigt)
       progress.status = 'Lade Agentur-Informationen...';
@@ -671,17 +770,28 @@ export const preloadService = {
       // Für jede Zeitperiode die relevanten API-Aufrufe hinzufügen
       for (const period of timePeriods) {
         apiCalls.push(
-          { name: `Quotas für ${period}`, fn: () => apiService.getAgencyQuotas(selectedAgencyId, period) },
-          { name: `Cancellation Rate für ${period}`, fn: () => apiService.getCancellationBeforeArrivalRate(selectedAgencyId, period) },
-          { name: `Reaction Times für ${period}`, fn: () => apiService.getAgencyReactionTimes(selectedAgencyId, period) },
-          { name: `Arrival to Cancellation für ${period}`, fn: () => apiService.getArrivalToCancellationStats(selectedAgencyId, period) },
-          { name: `Cancellation Stats für ${period}`, fn: () => apiService.getOverallCancellationBeforeArrivalStats(period) },
-          { name: `Cancellation Reasons für ${period}`, fn: () => apiService.getAgencyCancellationReasons(selectedAgencyId, period) },
-          { name: `Early End Reasons für ${period}`, fn: () => apiService.getAgencyEarlyEndReasons(selectedAgencyId, period) }
+          { name: `Quotas für ${period}`, fn: () => apiService.getAgencyQuotas(selectedAgencyId, period, false, true) },
+          { name: `Cancellation Rate für ${period}`, fn: () => apiService.getCancellationBeforeArrivalRate(selectedAgencyId, period, false, true) },
+          { name: `Reaction Times für ${period}`, fn: () => apiService.getAgencyReactionTimes(selectedAgencyId, period, false, true) },
+          { name: `Arrival to Cancellation für ${period}`, fn: () => apiService.getArrivalToCancellationStats(selectedAgencyId, period, false, true) },
+          { name: `Cancellation Stats für ${period}`, fn: () => apiService.getOverallCancellationBeforeArrivalStats(period, false, true) },
+          { name: `Cancellation Reasons für ${period}`, fn: () => apiService.getAgencyCancellationReasons(selectedAgencyId, period, false, true) },
+          { name: `Early End Reasons für ${period}`, fn: () => apiService.getAgencyEarlyEndReasons(selectedAgencyId, period, false, true) }
         );
       }
       
-      // 2. Zusätzliche API-Aufrufe für ProblematicStaysPage
+      
+      // 2. API-Aufrufe für ResponseTimesPage
+      for (const period of timePeriods) {
+        apiCalls.push(
+          { name: `Posting to Reservation Stats für ${period}`, fn: () => apiService.getOverallPostingToReservationStats(period) },
+          { name: `Reservation to Proposal Stats für ${period}`, fn: () => apiService.getOverallReservationToFirstProposalStats(period) },
+          { name: `Proposal to Cancellation Stats für ${period}`, fn: () => apiService.getOverallProposalToCancellationStats(period) },
+          { name: `Arrival to Cancellation Stats für ${period}`, fn: () => apiService.getOverallArrivalToCancellationStats(period) }
+        );
+      }
+
+      // 3. Zusätzliche API-Aufrufe für ProblematicStaysPage
       // Wir greifen auf den direkten API-Client zu für Problematic Stays
       for (const period of timePeriods) {
         // Für diese Aufrufe müssen wir den Backend-Pfad mit /api/ Präfix verwenden

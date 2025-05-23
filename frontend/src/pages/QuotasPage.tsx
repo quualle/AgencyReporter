@@ -127,15 +127,9 @@ const QuotasPage: React.FC = () => {
     if (comparisonPeriod === 'last_year') {
       // Für "Vorjahr (gleiches Quartal)" wollen wir genau den gleichen Zeitraum, aber ein Jahr früher
       switch(currentPeriod) {
-        case 'current_quarter':
-          // Wir befinden uns im aktuellen Quartal, ein Jahr zurück ist last_year (aber gleiches Quartal)
-          return 'same_quarter_last_year';
         case 'last_quarter':
           // Wir befinden uns im letzten Quartal, ein Jahr zurück ist das gleiche Quartal im Vorjahr
           return 'same_quarter_last_year';
-        case 'current_year':
-          // Wir befinden uns im aktuellen Jahr, zurück ist einfach last_year
-          return 'last_year';
         case 'last_year':
           // Wir befinden uns bereits im letzten Jahr, zurück ist two_years_ago
           return 'two_years_ago';
@@ -148,8 +142,6 @@ const QuotasPage: React.FC = () => {
     if (comparisonPeriod === 'last_quarter') {
       // Das vorherige Quartal je nach aktueller Auswahl
       switch(currentPeriod) {
-        case 'current_quarter':
-          return 'last_quarter';
         case 'last_quarter':
           return 'two_quarters_ago';
         default:
@@ -181,13 +173,6 @@ const QuotasPage: React.FC = () => {
     if (historicalPeriod === 'last_year') {
       // Basierend auf dem aktuellen Zeitraum, berechne den gleichen Zeitraum im Vorjahr
       switch(timePeriod) {
-        case 'current_quarter': {
-          // Aktuelles Quartal, aber ein Jahr zurück
-          const lastYear = subYears(now, 1);
-          startDate = getQuarterStart(lastYear);
-          endDate = getQuarterEnd(lastYear);
-          break;
-        }
         case 'last_quarter': {
           // Letztes Quartal, aber ein Jahr zurück
           const lastQuarter = subQuarters(now, 1);
@@ -196,27 +181,11 @@ const QuotasPage: React.FC = () => {
           endDate = getQuarterEnd(lastYearLastQuarter);
           break;
         }
-        case 'current_year': {
-          // Aktuelles Jahr, aber ein Jahr zurück = voriges Jahr
-          const lastYear = subYears(now, 1);
-          startDate = new Date(lastYear.getFullYear(), 0, 1); // 1. Januar des Vorjahres
-          endDate = new Date(lastYear.getFullYear(), 11, 31); // 31. Dezember des Vorjahres
-          break;
-        }
         case 'last_year': {
           // Letztes Jahr, aber ein Jahr zurück = vor zwei Jahren
           const twoYearsAgo = subYears(now, 2);
           startDate = new Date(twoYearsAgo.getFullYear(), 0, 1); // 1. Januar vor zwei Jahren
           endDate = new Date(twoYearsAgo.getFullYear(), 11, 31); // 31. Dezember vor zwei Jahren
-          break;
-        }
-        case 'current_month': {
-          // Aktueller Monat, aber ein Jahr zurück
-          const lastYear = subYears(now, 1);
-          startDate = new Date(lastYear.getFullYear(), now.getMonth(), 1); // Erster Tag des gleichen Monats im Vorjahr
-          // Letzter Tag des gleichen Monats im Vorjahr
-          const lastDayOfMonth = new Date(lastYear.getFullYear(), now.getMonth() + 1, 0).getDate();
-          endDate = new Date(lastYear.getFullYear(), now.getMonth(), lastDayOfMonth);
           break;
         }
         case 'last_month': {
@@ -239,13 +208,6 @@ const QuotasPage: React.FC = () => {
     } else if (historicalPeriod === 'last_quarter') {
       // Für Vorquartal
       switch(timePeriod) {
-        case 'current_quarter': {
-          // Ein Quartal zurück vom aktuellen Quartal
-          const lastQuarter = subQuarters(now, 1);
-          startDate = getQuarterStart(lastQuarter);
-          endDate = getQuarterEnd(lastQuarter);
-          break;
-        }
         case 'last_quarter': {
           // Zwei Quartale zurück
           const twoQuartersAgo = subQuarters(now, 2);
@@ -440,13 +402,12 @@ const QuotasPage: React.FC = () => {
           Promise.all(historicalPromises)
             .then(results => {
               // Formatiere die historischen Daten für die Trendanzeige
-              type PeriodKey = 'last_quarter' | 'last_year' | 'last_6months' | 'current_quarter';
+              type PeriodKey = 'last_quarter' | 'last_year' | 'last_6months';
               
               const periodsMapping: Record<PeriodKey, string> = {
                 'last_quarter': 'Letztes Quartal',
                 'last_year': 'Letztes Jahr',
-                'last_6months': 'Letzte 6 Monate',
-                'current_quarter': 'Aktuelles Quartal'
+                'last_6months': 'Letzte 6 Monate'
               };
               
               const periods = historicalPeriods.map(p => {

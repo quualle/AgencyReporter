@@ -128,11 +128,8 @@ const TimeFilter: React.FC = () => {
                 value={timePeriod}
                 onChange={handleTimePeriodChange}
             >
-                <option value="current_quarter">Aktuelles Quartal</option>
                 <option value="last_quarter">Letztes Quartal</option>
-                <option value="current_year">Aktuelles Jahr</option>
                 <option value="last_year">Letztes Jahr</option>
-                <option value="current_month">Aktueller Monat</option>
                 <option value="last_month">Letzter Monat</option>
                 <option value="all_time">Gesamt</option>
             </select>
