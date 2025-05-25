@@ -900,3 +900,158 @@ WHERE
 ORDER BY 
   start_rate DESC, ap.agency_name
 """
+
+# Query for all agencies completion stats (dashboard widget)
+GET_ALL_AGENCIES_COMPLETION_STATS = """
+WITH agency_started AS (
+  -- Alle angetretenen Einsätze pro Agentur (Basis für Durchführungsrate)
+  SELECT 
+    c.agency_id,
+    a.name AS agency_name,
+    COUNT(*) AS total_started
+  FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+  JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+  JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+  WHERE 
+    cs.created_at BETWEEN @start_date AND @end_date
+    AND cs.arrival IS NOT NULL
+    AND cs.arrival != ''
+    -- Muss den Status "Bestätigt" erreicht haben (angetreten)
+    AND EXISTS (
+      SELECT 1
+      FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+      WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+    )
+    -- Wurde nicht vor Anreise abgebrochen (also wirklich angetreten)
+    AND NOT (
+      cs.stage = 'Abgebrochen' AND 
+      EXISTS (
+        SELECT 1
+        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+        WHERE 
+          JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Abgebrochen'
+          AND TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at')) < TIMESTAMP(cs.arrival)
+      )
+    )
+  GROUP BY 
+    c.agency_id, a.name
+),
+agency_completed AS (
+  -- Erfolgreich durchgezogene Einsätze pro Agentur
+  WITH parsed AS (
+    SELECT
+      cs._id,
+      cs.arrival,
+      cs.departure,
+      cs.created_at,
+      cs.stage,
+      c.agency_id,
+      a.name as agency_name,
+      JSON_EXTRACT_ARRAY(cs.tracks) AS track_array
+    FROM
+      `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+    JOIN
+      `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+    JOIN
+      `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+    WHERE
+      cs.created_at BETWEEN @start_date AND @end_date
+      AND cs.arrival IS NOT NULL
+      AND cs.arrival != ''
+      -- Angetreten (gleiche Logik wie oben)
+      AND EXISTS (
+        SELECT 1
+        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+        WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+      )
+      AND NOT (
+        cs.stage = 'Abgebrochen' AND 
+        EXISTS (
+          SELECT 1
+          FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+          WHERE 
+            JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Abgebrochen'
+            AND TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at')) < TIMESTAMP(cs.arrival)
+        )
+      )
+      -- Muss ein departure Datum haben
+      AND cs.departure IS NOT NULL
+      AND cs.departure != ''
+      -- Departure muss in der Vergangenheit liegen
+      AND TIMESTAMP(cs.departure) < CURRENT_TIMESTAMP()
+  ),
+  departure_changes AS (
+    -- Für jeden Care Stay die Departure-Änderungen extrahieren und analysieren
+    SELECT
+      p._id,
+      p.agency_id,
+      -- Ursprüngliches departure-Datum aus den tracks ermitteln (erste Version)
+      ARRAY_AGG(
+        STRUCT(
+          JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[0]') AS original_departure,
+          JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[1]') AS new_departure,
+          JSON_EXTRACT_SCALAR(track_item, '$.created_at') AS change_timestamp
+        )
+        ORDER BY JSON_EXTRACT_SCALAR(track_item, '$.created_at') ASC
+      )[OFFSET(0)] AS first_change
+    FROM
+      parsed p,
+      UNNEST(p.track_array) AS track_item
+    WHERE
+      JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[0]') IS NOT NULL
+      AND SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[0]')) IS NOT NULL
+      AND SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[1]')) IS NOT NULL
+    GROUP BY
+      p._id, p.agency_id
+  )
+  SELECT
+    p.agency_id,
+    COUNT(*) AS total_completed
+  FROM parsed p
+  LEFT JOIN departure_changes dc ON p._id = dc._id
+  WHERE
+    -- Keine Änderung am Departure-Datum (ursprünglich geplant durchgezogen)
+    dc._id IS NULL
+    OR
+    -- Verlängerung (neues Datum später als ursprüngliches)
+    SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.new_departure) > SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure)
+    OR
+    -- Nur leichte Verkürzung (maximal 14 Tage früher)
+    TIMESTAMP_DIFF(
+      SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure),
+      SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.new_departure),
+      DAY
+    ) <= 14
+  GROUP BY
+    p.agency_id
+)
+
+SELECT 
+  ast.agency_id,
+  ast.agency_name,
+  ast.total_started,
+  COALESCE(ac.total_completed, 0) AS total_completed,
+  
+  -- Durchführungs-Metriken
+  SAFE_DIVIDE(
+    COALESCE(ac.total_completed, 0), 
+    ast.total_started
+  ) * 100 AS completion_rate,
+  
+  SAFE_DIVIDE(
+    (ast.total_started - COALESCE(ac.total_completed, 0)), 
+    ast.total_started
+  ) * 100 AS early_termination_rate
+
+FROM 
+  agency_started ast
+LEFT JOIN 
+  agency_completed ac ON ast.agency_id = ac.agency_id
+WHERE 
+  ast.total_started > 0  -- Nur Agenturen mit angetretenen Einsätzen
+ORDER BY 
+  completion_rate DESC, ast.agency_name
+"""

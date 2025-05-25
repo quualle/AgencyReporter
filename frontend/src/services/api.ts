@@ -464,6 +464,18 @@ export const apiService = {
     );
   },
 
+  getAllAgenciesCompletionStats: async (
+    timePeriod: string = 'last_quarter',
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
+    return await cachedApiCall(
+      `/quotas/all-agencies/completion`,
+      { time_period: timePeriod },
+      { useExtendedCache, forceRefresh }
+    );
+  },
+
   // Comparison functions
   compareAgencyReactionTimes: async (id: string, timePeriod: string = 'last_quarter'): Promise<ComparisonData> => {
     const response = await api.post('/reaction_times/compare', { agency_id: id, time_period: timePeriod });

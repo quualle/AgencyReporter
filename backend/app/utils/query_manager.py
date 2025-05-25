@@ -92,7 +92,9 @@ class QueryManager:
                 # Neue Query für Overall Stats hinzufügen
                 "GET_OVERALL_CANCELLED_BEFORE_ARRIVAL_STATS": quotas.GET_OVERALL_CANCELLED_BEFORE_ARRIVAL_STATS,
                 # Dashboard conversion stats für alle Agenturen
-                "GET_ALL_AGENCIES_CONVERSION_STATS": quotas.GET_ALL_AGENCIES_CONVERSION_STATS
+                "GET_ALL_AGENCIES_CONVERSION_STATS": quotas.GET_ALL_AGENCIES_CONVERSION_STATS,
+                # Dashboard completion stats für alle Agenturen
+                "GET_ALL_AGENCIES_COMPLETION_STATS": quotas.GET_ALL_AGENCIES_COMPLETION_STATS
             })
             
             # Load reaction time queries
@@ -941,3 +943,43 @@ class QueryManager:
             })
         
         return conversion_stats
+    
+    def get_all_agencies_completion_stats(self, start_date: str = None, end_date: str = None, time_period: str = "last_quarter") -> List[Dict[str, Any]]:
+        """
+        Get completion rate statistics for all agencies for dashboard comparison
+        Shows conversion from started care stays to successfully completed ones
+        
+        Args:
+            start_date (str, optional): Start date in 'YYYY-MM-DD' format
+            end_date (str, optional): End date in 'YYYY-MM-DD' format
+            time_period (str, optional): Predefined time period (last_quarter, last_month, etc.)
+            
+        Returns:
+            list: List of dictionaries with completion metrics for all agencies
+        """
+        # Calculate date range if not provided
+        if not start_date or not end_date:
+            start_date, end_date = self._calculate_date_range(time_period)
+        
+        # Parameters for BigQuery
+        params = {
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        
+        # Execute the query
+        results = self.execute_query("GET_ALL_AGENCIES_COMPLETION_STATS", params)
+        
+        # Format results for frontend consumption
+        completion_stats = []
+        for row in results:
+            completion_stats.append({
+                "agency_id": row.get("agency_id", ""),
+                "agency_name": row.get("agency_name", "Unknown Agency"),
+                "completion_rate": float(row.get("completion_rate", 0.0)),
+                "early_termination_rate": float(row.get("early_termination_rate", 0.0)),
+                "total_started": int(row.get("total_started", 0)),
+                "total_completed": int(row.get("total_completed", 0))
+            })
+        
+        return completion_stats

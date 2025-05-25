@@ -22,14 +22,25 @@ interface AgencyConversionData {
   total_started: number;
 }
 
+interface AgencyCompletionData {
+  agency_id: string;
+  agency_name: string;
+  completion_rate: number;
+  early_termination_rate: number;
+  total_started: number;
+  total_completed: number;
+}
+
 const Dashboard: React.FC = () => {
   const { timePeriod } = useAppStore();
   const [problematicData, setProblematicData] = useState<AgencyProblematicData[]>([]);
   const [conversionData, setConversionData] = useState<AgencyConversionData[]>([]);
+  const [completionData, setCompletionData] = useState<AgencyCompletionData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showAllProblematic, setShowAllProblematic] = useState<boolean>(false);
   const [showAllConversion, setShowAllConversion] = useState<boolean>(false);
+  const [showAllCompletion, setShowAllCompletion] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -90,6 +101,34 @@ const Dashboard: React.FC = () => {
           console.warn('Unexpected conversion data format:', conversionResponse);
           setConversionData([]);
         }
+
+        // Schritt 3: Completion-Daten für alle Agenturen laden
+        const completionResponse = await apiService.getAllAgenciesCompletionStats(timePeriod, false, true);
+        console.log('Dashboard completion data:', completionResponse);
+        
+        // API wraps data in {data: [...]} format
+        const completionArray = completionResponse?.data || completionResponse;
+        
+        if (completionArray && Array.isArray(completionArray)) {
+          // Echte Daten verarbeiten und sortieren
+          const sortedCompletionData = completionArray
+            .map((item: any) => ({
+              agency_id: item.agency_id,
+              agency_name: item.agency_name,
+              completion_rate: item.completion_rate || 0,
+              early_termination_rate: item.early_termination_rate || 0,
+              total_started: item.total_started || 0,
+              total_completed: item.total_completed || 0
+            }))
+            .sort((a: AgencyCompletionData, b: AgencyCompletionData) => 
+              b.completion_rate - a.completion_rate
+            );
+          
+          setCompletionData(sortedCompletionData);
+        } else {
+          console.warn('Unexpected completion data format:', completionResponse);
+          setCompletionData([]);
+        }
         
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
@@ -126,6 +165,18 @@ const Dashboard: React.FC = () => {
     return 'text-red-700 dark:text-red-300';
   };
 
+  const getCompletionColor = (rate: number): string => {
+    if (rate >= 80) return 'bg-green-500';
+    if (rate >= 65) return 'bg-yellow-500';
+    return 'bg-red-500';
+  };
+
+  const getCompletionTextColor = (rate: number): string => {
+    if (rate >= 80) return 'text-green-700 dark:text-green-300';
+    if (rate >= 65) return 'text-yellow-700 dark:text-yellow-300';
+    return 'text-red-700 dark:text-red-300';
+  };
+
   if (isLoading) {
     return <Loading message="Dashboard-Daten werden geladen..." />;
   }
@@ -136,6 +187,7 @@ const Dashboard: React.FC = () => {
 
   const displayProblematicData = showAllProblematic ? problematicData : problematicData.slice(0, 5);
   const displayConversionData = showAllConversion ? conversionData : conversionData.slice(0, 5);
+  const displayCompletionData = showAllCompletion ? completionData : completionData.slice(0, 5);
 
   return (
     <div className="dashboard">
@@ -148,8 +200,8 @@ const Dashboard: React.FC = () => {
         </p>
       </div>
 
-      {/* Top Section: 2 Widgets nebeneinander */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+      {/* Top Section: 3 Widgets nebeneinander */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         
         {/* Widget 1: Problematische Einsätze */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
@@ -283,13 +335,81 @@ const Dashboard: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Widget 3: Durchführungsrate */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center">
+                📊 Durchführungsrate
+                <span className="ml-2 text-sm font-normal text-gray-500">
+                  (Priorität: 7)
+                </span>
+              </h2>
+              <p className="text-gray-600 dark:text-gray-300 text-sm">
+                Angetreten → Durchgezogen (beste Durchführungsrate)
+              </p>
+            </div>
+            <button
+              onClick={() => setShowAllCompletion(!showAllCompletion)}
+              className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-colors"
+            >
+              {showAllCompletion ? 'Top 5' : 'Alle'} 
+              <span className="ml-1">{showAllCompletion ? '▲' : '▼'}</span>
+            </button>
+          </div>
+
+          {completionData.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Keine Durchführungs-Daten verfügbar
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {displayCompletionData.map((agency, index) => (
+                <div 
+                  key={agency.agency_id}
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <div className="flex items-center space-x-3">
+                    <span className="text-lg font-bold text-gray-400 w-6">
+                      #{index + 1}
+                    </span>
+                    <div className={`w-2 h-2 rounded-full ${getCompletionColor(agency.completion_rate)}`}></div>
+                    <div>
+                      <h3 className="font-medium text-gray-800 dark:text-white text-sm">
+                        {agency.agency_name}
+                      </h3>
+                      <p className="text-xs text-gray-600 dark:text-gray-300">
+                        {agency.total_started} Angetreten, {agency.total_completed} Durchgezogen
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-lg font-bold ${getCompletionTextColor(agency.completion_rate)}`}>
+                      {agency.completion_rate.toFixed(1)}%
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Durchführungsrate
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showAllCompletion && completionData.length > 5 && (
+            <div className="mt-3 text-center text-xs text-gray-500">
+              Zeige alle {completionData.length} Agenturen
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Placeholder für weitere Widgets */}
       <div className="text-center py-12 text-gray-500">
         <div className="text-4xl mb-4">🚧</div>
         <h3 className="text-lg font-medium mb-2">Weitere Widgets folgen</h3>
-        <p>7 weitere Dashboard-Widgets werden schrittweise implementiert</p>
+        <p>5 weitere Dashboard-Widgets werden schrittweise implementiert</p>
       </div>
     </div>
   );

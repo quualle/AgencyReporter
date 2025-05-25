@@ -58,3 +58,4 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Notes
 - okay ich habe jetzt die website betreten und NOCH NICHT auf den Button Alle Agenturen laden gedrückt. Schau die jetzt kurz die DB an um dannach einen direkten vergliech zu haben
+- Führe so häufig wie nur möglich Zwischenstandsspeicherungen in GitHub durch, sodass wir immer einen guten Fallback-Punkt haben.

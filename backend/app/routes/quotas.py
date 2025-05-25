@@ -199,6 +199,40 @@ async def get_cancellation_before_arrival_rate(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch cancellation before arrival rate: {str(e)}")
 
+@router.get("/all-agencies/completion")
+async def get_all_agencies_completion_stats(
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Get completion performance (completion rate and early termination rate) for all agencies.
+    Shows conversion from started care stays to successfully completed ones.
+    Returns: agency_id, agency_name, completion_rate, early_termination_rate, total_started, total_completed
+    """
+    try:
+        # Check cache first
+        cache_service = get_cache_service()
+        endpoint = f"/quotas/all-agencies/completion"
+        cache_key = cache_service.create_cache_key(endpoint, {"time_period": time_period})
+        cached_data = await cache_service.get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data.get("data", cached_data)
+        
+        query_manager = QueryManager()
+        completion_stats = query_manager.get_all_agencies_completion_stats(time_period)
+        
+        # Save to cache
+        await cache_service.save_cached_data(
+            cache_key=cache_key,
+            data={"data": completion_stats},
+            endpoint=endpoint,
+            agency_id=None,  # All agencies
+            time_period=time_period
+        )
+        
+        return completion_stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch all agencies completion stats: {str(e)}")
+
 @router.get("/{agency_id}/completion")
 async def get_completion_rate(
     agency_id: str,
