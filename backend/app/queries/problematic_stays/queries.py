@@ -105,11 +105,11 @@ problematic_stats AS (
 )
 
 SELECT
-  p.agency_id,
-  p.agency_name,
-  p.total_problematic,
+  tc.agency_id,
+  COALESCE(p.agency_name, 'Unknown Agency') AS agency_name,
+  COALESCE(p.total_problematic, 0) AS total_problematic,
   tc.total_count AS total_carestays,
-  SAFE_DIVIDE(p.total_problematic, tc.total_count) * 100 AS problematic_percentage,
+  SAFE_DIVIDE(COALESCE(p.total_problematic, 0), tc.total_count) * 100 AS problematic_percentage,
   
   -- Event-Typ-Statistiken
   p.cancelled_before_arrival_count,
@@ -182,11 +182,11 @@ SELECT
   p.avg_reason_confidence,
   p.avg_satisfaction_confidence
 FROM
-  problematic_stats p
+  total_carestays tc
 LEFT JOIN
-  total_carestays tc ON p.agency_id = tc.agency_id
+  problematic_stats p ON tc.agency_id = p.agency_id
 ORDER BY
-  p.total_problematic DESC
+  COALESCE(p.total_problematic, 0) DESC, tc.agency_id
 """
 
 # Abfrage für die Häufigkeitsverteilung der Abbruchgründe

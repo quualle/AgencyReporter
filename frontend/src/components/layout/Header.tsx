@@ -1,9 +1,14 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAppStore } from '../../store/appStore';
 import AgencySelector from '../common/AgencySelector';
 
 const Header: React.FC = () => {
   const { darkMode, toggleDarkMode } = useAppStore();
+  const location = useLocation();
+  
+  // Hide agency selector on dashboard page (comparison mode)
+  const showAgencySelector = location.pathname !== '/';
 
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm">
@@ -15,7 +20,7 @@ const Header: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-4">
-          <AgencySelector />
+          {showAgencySelector && <AgencySelector />}
           
           <button 
             onClick={toggleDarkMode}
