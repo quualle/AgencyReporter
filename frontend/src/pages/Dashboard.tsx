@@ -18,6 +18,8 @@ interface AgencyConversionData {
   start_rate: number;
   cancellation_rate: number;
   total_postings: number;
+  total_confirmed: number;
+  total_started: number;
 }
 
 const Dashboard: React.FC = () => {
@@ -60,28 +62,32 @@ const Dashboard: React.FC = () => {
           setProblematicData([]);
         }
 
-        // Schritt 2: Alle Agenturen für Conversion-Daten laden
-        const agenciesResponse = await apiService.getAgencies();
-        console.log('Dashboard agencies data:', agenciesResponse);
+        // Schritt 2: Echte Conversion-Daten für alle Agenturen laden
+        const conversionResponse = await apiService.getAllAgenciesConversionStats(timePeriod, false, true);
+        console.log('Dashboard conversion data:', conversionResponse);
         
-        if (agenciesResponse && Array.isArray(agenciesResponse)) {
-          // Für Demo: Simuliere Conversion-Daten basierend auf Agenturen
-          // TODO: Implementiere echte API für alle Agenturen Quotas
-          const conversionDataTemp = agenciesResponse
-            .map((agency: any) => ({
-              agency_id: agency.agency_id,
-              agency_name: agency.agency_name,
-              start_rate: Math.random() * 30 + 70, // Demo: 70-100%
-              cancellation_rate: Math.random() * 30, // Demo: 0-30%
-              total_postings: Math.floor(Math.random() * 500) + 50 // Demo: 50-550
+        // API wraps data in {data: [...]} format
+        const conversionArray = conversionResponse?.data || conversionResponse;
+        
+        if (conversionArray && Array.isArray(conversionArray)) {
+          // Echte Daten verarbeiten und sortieren
+          const sortedConversionData = conversionArray
+            .map((item: any) => ({
+              agency_id: item.agency_id,
+              agency_name: item.agency_name,
+              start_rate: item.start_rate || 0,
+              cancellation_rate: item.cancellation_rate || 0,
+              total_postings: item.total_postings || 0,
+              total_confirmed: item.total_confirmed || 0,
+              total_started: item.total_started || 0
             }))
             .sort((a: AgencyConversionData, b: AgencyConversionData) => 
               b.start_rate - a.start_rate
             );
           
-          setConversionData(conversionDataTemp);
+          setConversionData(sortedConversionData);
         } else {
-          console.warn('Unexpected agencies data format:', agenciesResponse);
+          console.warn('Unexpected conversion data format:', conversionResponse);
           setConversionData([]);
         }
         
@@ -109,14 +115,14 @@ const Dashboard: React.FC = () => {
   };
 
   const getConversionColor = (rate: number): string => {
-    if (rate >= 90) return 'bg-green-500';
-    if (rate >= 80) return 'bg-yellow-500';
+    if (rate >= 85) return 'bg-green-500';
+    if (rate >= 70) return 'bg-yellow-500';
     return 'bg-red-500';
   };
 
   const getConversionTextColor = (rate: number): string => {
-    if (rate >= 90) return 'text-green-700 dark:text-green-300';
-    if (rate >= 80) return 'text-yellow-700 dark:text-yellow-300';
+    if (rate >= 85) return 'text-green-700 dark:text-green-300';
+    if (rate >= 70) return 'text-yellow-700 dark:text-yellow-300';
     return 'text-red-700 dark:text-red-300';
   };
 
@@ -215,13 +221,13 @@ const Dashboard: React.FC = () => {
           <div className="flex justify-between items-center mb-4">
             <div>
               <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center">
-                ⚖️ Conversion Performance
+                ⚖️ Antrittserfolg
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   (Priorität: 8)
                 </span>
               </h2>
               <p className="text-gray-600 dark:text-gray-300 text-sm">
-                Ausschreibung → Start (beste Startraten)
+                Bestätigt → Angetreten (beste Antrittserfolg)
               </p>
             </div>
             <button
@@ -254,7 +260,7 @@ const Dashboard: React.FC = () => {
                         {agency.agency_name}
                       </h3>
                       <p className="text-xs text-gray-600 dark:text-gray-300">
-                        {agency.total_postings} Ausschreibungen
+                        {agency.total_confirmed} Bestätigte, {agency.total_started} Angetreten
                       </p>
                     </div>
                   </div>
@@ -263,7 +269,7 @@ const Dashboard: React.FC = () => {
                       {agency.start_rate.toFixed(1)}%
                     </div>
                     <div className="text-xs text-gray-500">
-                      Startrate
+                      Erfolgreich Angetreten
                     </div>
                   </div>
                 </div>
@@ -276,12 +282,6 @@ const Dashboard: React.FC = () => {
               Zeige alle {conversionData.length} Agenturen
             </div>
           )}
-          
-          <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-700">
-            <p className="text-xs text-yellow-800 dark:text-yellow-200">
-              ⚠️ Demo-Daten: Echte Quotas-API für alle Agenturen wird noch implementiert
-            </p>
-          </div>
         </div>
       </div>
 

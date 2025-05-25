@@ -90,7 +90,9 @@ class QueryManager:
                 # Quote 7: Pflegeeinsatz angetreten - vollständig beendet
                 "GET_COMPLETED_CARE_STAYS": quotas.GET_COMPLETED_CARE_STAYS,
                 # Neue Query für Overall Stats hinzufügen
-                "GET_OVERALL_CANCELLED_BEFORE_ARRIVAL_STATS": quotas.GET_OVERALL_CANCELLED_BEFORE_ARRIVAL_STATS
+                "GET_OVERALL_CANCELLED_BEFORE_ARRIVAL_STATS": quotas.GET_OVERALL_CANCELLED_BEFORE_ARRIVAL_STATS,
+                # Dashboard conversion stats für alle Agenturen
+                "GET_ALL_AGENCIES_CONVERSION_STATS": quotas.GET_ALL_AGENCIES_CONVERSION_STATS
             })
             
             # Load reaction time queries
@@ -904,3 +906,38 @@ class QueryManager:
         
         # Call the new function
         return self.get_reservation_fulfillment_rate(agency_id, start_date, end_date, time_period)
+
+    def get_all_agencies_conversion_stats(self, time_period: str = "last_quarter") -> List[Dict[str, Any]]:
+        """
+        Get conversion performance (start rate and cancellation rate) for all agencies.
+        
+        Args:
+            time_period (str): Predefined time period (last_quarter, last_month, etc.)
+            
+        Returns:
+            List[dict]: List of dictionaries with conversion metrics for each agency
+                       Each dict contains: agency_id, agency_name, start_rate, cancellation_rate, total_postings
+        """
+        start_date, end_date = self._calculate_date_range(time_period)
+        params = {"start_date": start_date, "end_date": end_date}
+        
+        results = self.execute_query("GET_ALL_AGENCIES_CONVERSION_STATS", params)
+        
+        if not results:
+            return []
+        
+        # Process results into the desired format
+        conversion_stats = []
+        for row in results:
+            conversion_stats.append({
+                "agency_id": row.get("agency_id"),
+                "agency_name": row.get("agency_name", "Unknown Agency"),
+                "start_rate": float(row.get("start_rate", 0.0)),
+                "cancellation_rate": float(row.get("cancellation_rate", 0.0)), 
+                "total_postings": int(row.get("total_postings", 0)),
+                "total_confirmed": int(row.get("total_confirmed", 0)),
+                "total_started": int(row.get("total_started", 0)),
+                "total_cancelled_before_arrival": int(row.get("total_cancelled_before_arrival", 0))
+            })
+        
+        return conversion_stats

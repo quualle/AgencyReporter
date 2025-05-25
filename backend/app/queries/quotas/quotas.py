@@ -829,3 +829,74 @@ WHERE
 GROUP BY
     a.name
 """
+
+# Query for all agencies conversion stats (dashboard widget)
+GET_ALL_AGENCIES_CONVERSION_STATS = """
+WITH agency_confirmed AS (
+  -- Gesamtanzahl bestätigter Einsätze pro Agentur (Basis für Conversion)
+  SELECT 
+    c.agency_id,
+    a.name AS agency_name,
+    COUNT(*) AS total_confirmed
+  FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+  JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+  JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+  WHERE 
+    cs.created_at BETWEEN @start_date AND @end_date
+    AND cs.stage = 'Bestätigt'  -- Nur bestätigte Einsätze
+  GROUP BY 
+    c.agency_id, a.name
+),
+agency_cancellations AS (
+  -- Abbrüche von bestätigten Einsätzen pro Agentur
+  SELECT 
+    c.agency_id,
+    COUNT(*) AS total_cancelled_before_arrival
+  FROM 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+  JOIN 
+    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+  WHERE 
+    cs.created_at BETWEEN @start_date AND @end_date
+    AND cs.stage = 'Abgebrochen'
+    -- Nur Einsätze, die vorher bestätigt waren
+    AND EXISTS (
+      SELECT 1
+      FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+      WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+    )
+  GROUP BY 
+    c.agency_id
+)
+
+SELECT 
+  ap.agency_id,
+  ap.agency_name,
+  ap.total_confirmed,
+  COALESCE(ac.total_cancelled_before_arrival, 0) AS total_cancelled_before_arrival,
+  (ap.total_confirmed - COALESCE(ac.total_cancelled_before_arrival, 0)) AS total_started,
+  ap.total_confirmed AS total_postings,  -- Alias für Frontend-Kompatibilität
+  
+  -- Conversion-Metriken
+  SAFE_DIVIDE(
+    (ap.total_confirmed - COALESCE(ac.total_cancelled_before_arrival, 0)), 
+    ap.total_confirmed
+  ) * 100 AS start_rate,
+  
+  SAFE_DIVIDE(
+    COALESCE(ac.total_cancelled_before_arrival, 0), 
+    ap.total_confirmed
+  ) * 100 AS cancellation_rate
+
+FROM 
+  agency_confirmed ap
+LEFT JOIN 
+  agency_cancellations ac ON ap.agency_id = ac.agency_id
+WHERE 
+  ap.total_confirmed > 0  -- Nur Agenturen mit Aktivität
+ORDER BY 
+  start_rate DESC, ap.agency_name
+"""

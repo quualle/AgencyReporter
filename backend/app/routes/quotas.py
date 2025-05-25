@@ -357,6 +357,39 @@ async def get_overall_cancellation_stats(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch overall cancellation before arrival stats: {str(e)}")
 
+@router.get("/all-agencies/conversion")
+async def get_all_agencies_conversion_stats(
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Get conversion performance (start rate and cancellation rate) for all agencies.
+    Returns: agency_id, agency_name, start_rate, cancellation_rate, total_postings
+    """
+    try:
+        # Check cache first
+        cache_service = get_cache_service()
+        endpoint = f"/quotas/all-agencies/conversion"
+        cache_key = cache_service.create_cache_key(endpoint, {"time_period": time_period})
+        cached_data = await cache_service.get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data.get("data", cached_data)
+        
+        query_manager = QueryManager()
+        conversion_stats = query_manager.get_all_agencies_conversion_stats(time_period)
+        
+        # Save to cache
+        await cache_service.save_cached_data(
+            cache_key=cache_key,
+            data={"data": conversion_stats},
+            endpoint=endpoint,
+            agency_id=None,  # All agencies
+            time_period=time_period
+        )
+        
+        return conversion_stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch all agencies conversion stats: {str(e)}")
+
 
 # Include other routers if necessary
 # from . import other_router
