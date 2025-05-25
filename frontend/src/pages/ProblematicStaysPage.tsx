@@ -63,15 +63,8 @@ const ProblematicStaysPage: React.FC = () => {
       
       const agencyId = selectedAgency ? selectedAgency.agency_id : undefined;
       
-      // Prüfen ob bereits Daten für diese Kombination vorhanden sind
-      const hasValidData = overviewData?.data && overviewData.data.length > 0;
-      const currentAgencyInData = overviewData?.data?.[0]?.agency_id;
-      const dataMatchesCurrentSelection = !agencyId || currentAgencyInData === agencyId;
-      
-      if (hasValidData && dataMatchesCurrentSelection) {
-        console.log('🚀 Skipping data reload - valid cached data exists');
-        return;
-      }
+      // Note: Removed intelligent reload logic as it prevents loading after route changes
+      // The cache system already handles duplicate requests efficiently
       
       // Seite als "wird geladen" markieren
       setIsPageLoading(true);
