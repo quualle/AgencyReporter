@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>API Test</h1>
+    <button onclick="testApi()">Test API</button>
+    <div id="result"></div>
+    
+    <script>
+        async function testApi() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                // Test direct backend API
+                const response1 = await fetch('http://localhost:8000/api/agencies');
+                const data1 = await response1.json();
+                resultDiv.innerHTML += '<h2>Direct Backend (8000):</h2><pre>' + JSON.stringify(data1, null, 2).slice(0, 500) + '...</pre>';
+            } catch (error) {
+                resultDiv.innerHTML += '<h2>Direct Backend Error:</h2><pre>' + error + '</pre>';
+            }
+            
+            try {
+                // Test through frontend proxy
+                const response2 = await fetch('http://localhost:3000/api/agencies');
+                const data2 = await response2.json();
+                resultDiv.innerHTML += '<h2>Through Frontend Proxy (3000):</h2><pre>' + JSON.stringify(data2, null, 2).slice(0, 500) + '...</pre>';
+            } catch (error) {
+                resultDiv.innerHTML += '<h2>Frontend Proxy Error:</h2><pre>' + error + '</pre>';
+            }
+        }
+    </script>
+</body>
+</html>

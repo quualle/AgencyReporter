@@ -12,7 +12,6 @@ from urllib.parse import unquote
 
 from ..services.database_cache_service import get_cache_service, DatabaseCacheService
 from ..utils.database_connection import get_async_db_session
-from ..dependencies import get_db
 from ..routes.agencies import get_all_agencies
 
 router = APIRouter()
@@ -352,7 +351,7 @@ async def execute_comprehensive_preload():
 @router.post("/preload/dashboard")
 async def preload_dashboard_data(
     time_period: str = Query(default="last_quarter", description="Time period to preload"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db_session),
     cache_service: DatabaseCacheService = Depends(get_cache_service)
 ):
     """
