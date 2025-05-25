@@ -3,13 +3,11 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAppStore } from '../../store/appStore';
 import TimeFilter from '../common/TimeFilter';
 import CacheStats from '../common/CacheStats';
-import { preloadService, databaseCacheService } from '../../services/api';
+import { preloadService } from '../../services/api';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const { 
-    activeTab, 
-    setActiveTab, 
     selectedAgency, 
     setPreloadStatus, 
     setShowPreloadOverlay,
@@ -239,14 +237,12 @@ const Sidebar: React.FC = () => {
           <TimeFilter />
         </div>
         
-        {selectedAgency && (
-          <div className="mt-6">
-            <CacheStats 
-              agencyId={selectedAgency.agency_id} 
-              showDetails={true}
-            />
-          </div>
-        )}
+        <div className="mt-6">
+          <CacheStats 
+            agencyId={selectedAgency?.agency_id} 
+            showDetails={selectedAgency ? true : false}
+          />
+        </div>
         
         <div className="mt-8 space-y-3">
           <button

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
-import { apiService } from '../services/api';
+import { apiService, preloadService } from '../services/api';
 import Loading from '../components/common/Loading';
 import ErrorMessage from '../components/common/ErrorMessage';
+import CacheStats from '../components/common/CacheStats';
 
 interface AgencyProblematicData {
   agency_id: string;
@@ -32,7 +33,7 @@ interface AgencyCompletionData {
 }
 
 const Dashboard: React.FC = () => {
-  const { timePeriod } = useAppStore();
+  const { timePeriod, setPreloadStatus, setShowPreloadOverlay } = useAppStore();
   const [problematicData, setProblematicData] = useState<AgencyProblematicData[]>([]);
   const [conversionData, setConversionData] = useState<AgencyConversionData[]>([]);
   const [completionData, setCompletionData] = useState<AgencyCompletionData[]>([]);
@@ -41,6 +42,7 @@ const Dashboard: React.FC = () => {
   const [showAllProblematic, setShowAllProblematic] = useState<boolean>(false);
   const [showAllConversion, setShowAllConversion] = useState<boolean>(false);
   const [showAllCompletion, setShowAllCompletion] = useState<boolean>(false);
+  const [isPreloading, setIsPreloading] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -198,6 +200,76 @@ const Dashboard: React.FC = () => {
         <p className="text-gray-600 dark:text-gray-300">
           Vergleichende Übersicht aller Agenturen
         </p>
+      </div>
+
+      {/* Cache Status und Preload Button */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <CacheStats showDetails={false} />
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Dashboard-Daten vorladen</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+              Lädt alle Dashboard-Daten für optimale Performance
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              setIsPreloading(true);
+              setShowPreloadOverlay(true);
+              setPreloadStatus({
+                totalRequests: 0,
+                completedRequests: 0,
+                inProgress: true,
+                status: 'Starte Dashboard-Datenladung...'
+              });
+              
+              try {
+                await preloadService.preloadDashboardData(
+                  timePeriod,
+                  (progress) => {
+                    setPreloadStatus(progress);
+                  }
+                );
+              } catch (error) {
+                console.error('Dashboard preload failed:', error);
+                setPreloadStatus({
+                  totalRequests: 0,
+                  completedRequests: 0,
+                  inProgress: false,
+                  status: 'Fehler beim Laden der Dashboard-Daten',
+                  error: error instanceof Error ? error.message : 'Unbekannter Fehler'
+                });
+              } finally {
+                setIsPreloading(false);
+                // Reload dashboard data after preloading
+                window.location.reload();
+              }
+            }}
+            disabled={isPreloading}
+            className={`px-4 py-2 rounded-md font-medium transition-colors ${
+              isPreloading
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {isPreloading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Lädt...
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5 mr-2 inline" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+                Daten vorladen
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Top Section: 3 Widgets nebeneinander */}

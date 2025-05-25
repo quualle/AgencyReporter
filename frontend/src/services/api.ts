@@ -922,6 +922,47 @@ export const databaseCacheService = {
 // Enhanced Preload Service
 export const preloadService = {
   // Comprehensive preload for ALL agencies and ALL time periods
+  preloadDashboardData: async (
+    timePeriod: string = 'last_quarter',
+    progressCallback?: (progress: PreloadProgress) => void
+  ): Promise<any> => {
+    try {
+      const response = await api.post('/cache/preload/dashboard', null, {
+        params: { time_period: timePeriod }
+      });
+      
+      const sessionKey = response.data.session_key;
+      
+      // Poll für Progress-Updates
+      if (progressCallback && sessionKey) {
+        const pollInterval = setInterval(async () => {
+          try {
+            const progressResponse = await api.get(`/cache/preload/session/${sessionKey}`);
+            const progress = progressResponse.data;
+            
+            progressCallback({
+              totalRequests: progress.total_requests,
+              completedRequests: progress.completed_requests,
+              inProgress: progress.status === 'in_progress',
+              status: `Dashboard-Daten werden geladen: ${progress.successful_requests} erfolgreich, ${progress.failed_requests} fehlgeschlagen`
+            });
+            
+            if (progress.status !== 'in_progress') {
+              clearInterval(pollInterval);
+            }
+          } catch (error) {
+            console.error('Error polling dashboard preload progress:', error);
+          }
+        }, 1000);
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Dashboard preload failed:', error);
+      throw error;
+    }
+  },
+
   preloadComprehensiveData: async (
     onProgressUpdate?: (progress: PreloadProgress) => void
   ): Promise<boolean> => {

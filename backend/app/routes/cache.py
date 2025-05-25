@@ -7,10 +7,13 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any, List, Optional
 import logging
+import httpx
 from urllib.parse import unquote
 
-from ..services.database_cache_service import get_cache_service
+from ..services.database_cache_service import get_cache_service, DatabaseCacheService
 from ..utils.database_connection import get_async_db_session
+from ..dependencies import get_db
+from ..routes.agencies import get_all_agencies
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -344,6 +347,109 @@ async def execute_comprehensive_preload():
     except Exception as e:
         logger.error(f"Error during comprehensive preload execution: {e}")
         raise HTTPException(status_code=500, detail=f"Comprehensive preload failed: {str(e)}")
+
+
+@router.post("/preload/dashboard")
+async def preload_dashboard_data(
+    time_period: str = Query(default="last_quarter", description="Time period to preload"),
+    db: AsyncSession = Depends(get_db),
+    cache_service: DatabaseCacheService = Depends(get_cache_service)
+):
+    """
+    Preload all dashboard-specific data for all agencies.
+    This is optimized for dashboard performance.
+    """
+    try:
+        logger.info(f"Starting dashboard preload for time period: {time_period}")
+        
+        # Create a new preload session
+        session_key = await cache_service.create_preload_session(
+            agency_id=None,  # Dashboard preload is not agency-specific
+            total_requests=0,
+            preload_type="dashboard"
+        )
+        
+        # Get all agencies
+        agencies = await get_all_agencies()
+        
+        # Dashboard requires 3 endpoints total (not per agency)
+        # 1. problematic_stays/overview (for all agencies)
+        # 2. quotas/all-agencies/conversion
+        # 3. quotas/all-agencies/completion
+        total_requests = 3
+        successful_requests = 0
+        failed_requests = 0
+        completed_requests = 0
+        
+        logger.info(f"Preloading dashboard data for time period: {time_period}")
+        
+        # Update initial progress
+        await cache_service.update_preload_progress(session_key, total_requests, 0, 0)
+        
+        # Base URL for internal API calls
+        base_url = "http://localhost:8000/api"
+        
+        # Dashboard-specific endpoints
+        dashboard_endpoints = [
+            f"/problematic_stays/overview?time_period={time_period}",  # All agencies overview
+            f"/quotas/all-agencies/conversion?time_period={time_period}",
+            f"/quotas/all-agencies/completion?time_period={time_period}"
+        ]
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for endpoint in dashboard_endpoints:
+                try:
+                    # Make the API call
+                    url = f"{base_url}{endpoint}"
+                    response = await client.get(url)
+                    
+                    if response.status_code == 200:
+                        successful_requests += 1
+                        logger.debug(f"Successfully preloaded: {endpoint}")
+                    else:
+                        failed_requests += 1
+                        logger.warning(f"Failed to preload {endpoint}: HTTP {response.status_code}")
+                        
+                except Exception as e:
+                    failed_requests += 1
+                    logger.error(f"Error preloading {endpoint}: {e}")
+                
+                completed_requests += 1
+                
+                # Update progress
+                await cache_service.update_preload_progress(
+                    session_key, total_requests, successful_requests, failed_requests
+                )
+        
+        # Final progress update
+        await cache_service.update_preload_progress(
+            session_key, total_requests, successful_requests, failed_requests
+        )
+        
+        # Complete the session
+        success = failed_requests == 0
+        
+        if success:
+            logger.info(f"Dashboard preload completed successfully: {successful_requests} successful")
+            await cache_service.complete_preload_session(session_key, True, None)
+        else:
+            error_message = f"{failed_requests} requests failed"
+            logger.warning(f"Dashboard preload completed with errors: {successful_requests} successful, {failed_requests} failed")
+            await cache_service.complete_preload_session(session_key, False, error_message)
+        
+        return {
+            "message": "Dashboard preload completed",
+            "session_key": session_key,
+            "total_requests": total_requests,
+            "successful_requests": successful_requests,
+            "failed_requests": failed_requests,
+            "success_rate": (successful_requests / total_requests) * 100 if total_requests > 0 else 0,
+            "agencies_processed": len(agencies)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error during dashboard preload execution: {e}")
+        raise HTTPException(status_code=500, detail=f"Dashboard preload failed: {str(e)}")
 
 
 @router.get("/preload/session/{session_key}")
