@@ -10,8 +10,12 @@ interface DistributionWidgetProps {
 }
 
 const DistributionWidget: React.FC<DistributionWidgetProps> = ({ data, isLoading }) => {
+  // Debug logging
+  console.log('DistributionWidget received:', { data, isLoading, dataLength: data?.length });
+  
   // Wenn noch keine Daten geladen sind oder das Datenformat nicht stimmt
   if (isLoading || !data || data.length === 0) {
+    console.log('DistributionWidget showing gray skeleton:', { isLoading, hasData: !!data, dataLength: data?.length });
     return (
       <div className="h-64 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse"></div>
     );

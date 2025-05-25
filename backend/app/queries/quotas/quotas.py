@@ -139,7 +139,7 @@ WHERE
              FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
              WHERE 
                  JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Abgebrochen'
-                 AND TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at')) >= 
+                 AND SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', JSON_EXTRACT_SCALAR(track, '$.created_at')) >= 
                     TIMESTAMP_ADD(TIMESTAMP(cs.arrival), INTERVAL 1 DAY)
          ))
     )
@@ -185,7 +185,7 @@ WHERE
              FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
              WHERE 
                  JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Abgebrochen'
-                 AND TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at')) >= 
+                 AND SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', JSON_EXTRACT_SCALAR(track, '$.created_at')) >= 
                     TIMESTAMP_ADD(TIMESTAMP(cs.arrival), INTERVAL 1 DAY)
          ))
     )
@@ -674,6 +674,8 @@ departure_changes AS (
     UNNEST(p.track_array) AS track_item
   WHERE
     JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[0]') IS NOT NULL
+    AND SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[0]')) IS NOT NULL
+    AND SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[1]')) IS NOT NULL
   GROUP BY
     p._id
 )
@@ -687,12 +689,12 @@ WHERE
   dc._id IS NULL
   OR
   -- Oder Verlängerung (neues Datum später als ursprüngliches)
-  TIMESTAMP(dc.first_change.new_departure) > TIMESTAMP(dc.first_change.original_departure)
+  SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.new_departure) > SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure)
   OR
   -- Oder nur leichte Verkürzung (maximal 14 Tage früher)
   TIMESTAMP_DIFF(
-    TIMESTAMP(dc.first_change.original_departure),
-    TIMESTAMP(dc.first_change.new_departure),
+    SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure),
+    SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.new_departure),
     DAY
   ) <= 14
 GROUP BY

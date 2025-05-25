@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Any
 from ..utils.query_manager import QueryManager
 from ..models import TimeFilter, AgencyRequest
 from ..dependencies import get_settings
+from ..services.database_cache_service import get_cache_service
 
 router = APIRouter()
 
@@ -170,11 +171,30 @@ async def get_cancellation_before_arrival_rate(
     (Quote 6: Anzahl gemachter Personalvorschläge - Anzahl VOR Einsatz abgebrochener Pflegeeinsätze)
     """
     try:
+        # Check cache first
+        cache_service = get_cache_service()
+        endpoint = f"/quotas/{agency_id}/cancellation-before-arrival"
+        cache_key = cache_service.create_cache_key(endpoint, {"time_period": time_period})
+        cached_data = await cache_service.get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data.get("data", cached_data)
+        
         query_manager = QueryManager()
         cancellation_metrics = query_manager.get_cancellation_before_arrival_rate(
             agency_id=agency_id,
             time_period=time_period
         )
+        
+        # Save to cache
+        await cache_service.save_cached_data(
+            cache_key=cache_key,
+            data={"data": cancellation_metrics},
+            endpoint=endpoint,
+            agency_id=agency_id,
+            time_period=time_period,
+            expires_hours=48
+        )
+        
         return cancellation_metrics
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch cancellation before arrival rate: {str(e)}")
@@ -209,6 +229,19 @@ async def get_all_quotas(
     Get all quota metrics for a specific agency
     """
     try:
+        # Check cache first
+        cache_service = get_cache_service()
+        endpoint = f"/quotas/{agency_id}/all"
+        params = {"time_period": time_period}
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+        cache_key = cache_service.create_cache_key(endpoint, params)
+        cached_data = await cache_service.get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data.get("data", cached_data)
+        
         query_manager = QueryManager()
         all_quotas = query_manager.get_all_quotas(
             agency_id=agency_id,
@@ -216,9 +249,27 @@ async def get_all_quotas(
             end_date=end_date,
             time_period=time_period
         )
+        
+        # Save to cache
+        await cache_service.save_cached_data(
+            cache_key=cache_key,
+            data={"data": all_quotas},
+            endpoint=endpoint,
+            agency_id=agency_id,
+            time_period=time_period,
+            expires_hours=48
+        )
+        
         return all_quotas
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch all quotas: {str(e)}")
+        # Check if it's a specific timestamp error and provide a more helpful message
+        error_msg = str(e)
+        if "Invalid timestamp" in error_msg and "252024" in error_msg:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Data quality issue: Invalid timestamp found in database. This agency may have corrupted date data. Please contact support."
+            )
+        raise HTTPException(status_code=500, detail=f"Failed to fetch all quotas: {error_msg}")
 
 @router.post("/custom")
 async def get_custom_metrics(request: Dict[str, Any]):

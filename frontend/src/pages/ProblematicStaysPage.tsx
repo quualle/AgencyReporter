@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
-import axios from 'axios';
-
+import { apiService } from '../services/api';
 import InstantDepartureWidget from '../components/problematic_stays/InstantDepartureWidget';
 import CustomerSatisfactionWidget from '../components/problematic_stays/CustomerSatisfactionWidget';
 import TrendAnalysisWidget from '../components/problematic_stays/TrendAnalysisWidget';
@@ -10,22 +9,25 @@ import DistributionWidget from '../components/problematic_stays/DistributionWidg
 import CancellationLeadTimeWidget from '../components/problematic_stays/CancellationLeadTimeWidget';
 import ReasonListWidget from '../components/problematic_stays/ReasonListWidget';
 import TimeAnalysisWidget from '../components/problematic_stays/TimeAnalysisWidget';
-
 import AgencySelector from '../components/common/AgencySelector';
+
+console.log('🔥 ProblematicStaysPage LOADED - NEW VERSION WITH APISERVICE');
+console.log('🔥 apiService imported:', apiService);
+console.log('🔥 getProblematicStaysOverview method:', apiService.getProblematicStaysOverview);
 
 const ProblematicStaysPage: React.FC = () => {
   const { timePeriod, selectedAgency, setActiveTab } = useAppStore();
   
   // State für die verschiedenen Daten
-  const [overviewData, setOverviewData] = useState<any[]>([]);
-  const [reasonsData, setReasonsData] = useState<any[]>([]);
-  const [timeAnalysisData, setTimeAnalysisData] = useState<any[]>([]);
-  const [heatmapData, setHeatmapData] = useState<any[]>([]);
-  const [instantDeparturesData, setInstantDeparturesData] = useState<any[]>([]);
-  const [replacementData, setReplacementData] = useState<any[]>([]);
-  const [satisfactionData, setSatisfactionData] = useState<any[]>([]);
-  const [trendData, setTrendData] = useState<any[]>([]);
-  const [cancellationLeadTimeData, setCancellationLeadTimeData] = useState<any[]>([]);
+  const [overviewData, setOverviewData] = useState<any>({ data: [] });
+  const [reasonsData, setReasonsData] = useState<any>({ data: [] });
+  const [timeAnalysisData, setTimeAnalysisData] = useState<any>({ data: [] });
+  const [heatmapData, setHeatmapData] = useState<any>({ data: [] });
+  const [instantDeparturesData, setInstantDeparturesData] = useState<any>({ data: [] });
+  const [replacementData, setReplacementData] = useState<any>({ data: [] });
+  const [satisfactionData, setSatisfactionData] = useState<any>({ data: [] });
+  const [trendData, setTrendData] = useState<any>({ data: [] });
+  const [cancellationLeadTimeData, setCancellationLeadTimeData] = useState<any>({ data: [] });
   
   // Loading States
   const [isOverviewLoading, setIsOverviewLoading] = useState<boolean>(true);
@@ -51,84 +53,84 @@ const ProblematicStaysPage: React.FC = () => {
   // Daten laden
   useEffect(() => {
     const fetchData = async () => {
+      // Debug logging for state changes
+      console.log('🔄 ProblematicStaysPage useEffect triggered:', { 
+        selectedAgency: selectedAgency?.agency_name, 
+        agencyId: selectedAgency?.agency_id,
+        timePeriod,
+        currentOverviewDataLength: overviewData?.data?.length 
+      });
+      
+      const agencyId = selectedAgency ? selectedAgency.agency_id : undefined;
+      
+      // Prüfen ob bereits Daten für diese Kombination vorhanden sind
+      const hasValidData = overviewData?.data && overviewData.data.length > 0;
+      const currentAgencyInData = overviewData?.data?.[0]?.agency_id;
+      const dataMatchesCurrentSelection = !agencyId || currentAgencyInData === agencyId;
+      
+      if (hasValidData && dataMatchesCurrentSelection) {
+        console.log('🚀 Skipping data reload - valid cached data exists');
+        return;
+      }
+      
       // Seite als "wird geladen" markieren
       setIsPageLoading(true);
       setLoadingProgress(0);
-      
-      const agencyId = selectedAgency ? selectedAgency.agency_id : null;
       
       try {
         // Alle Anfragen parallel starten anstatt sequentiell
         const requests = [
           // Übersichtsdaten
           {
-            request: axios.get('/api/problematic_stays/overview', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysOverview(agencyId, timePeriod),
             setData: setOverviewData,
             setLoading: setIsOverviewLoading
           },
           // Gründe
           {
-            request: axios.get('/api/problematic_stays/reasons', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysReasons(agencyId, undefined, timePeriod),
             setData: setReasonsData,
             setLoading: setIsReasonsLoading
           },
           // Zeitliche Analyse
           {
-            request: axios.get('/api/problematic_stays/time-analysis', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysTimeAnalysis(agencyId, undefined, undefined, timePeriod),
             setData: setTimeAnalysisData,
             setLoading: setIsTimeAnalysisLoading
           },
           // Heatmap-Daten
           {
-            request: axios.get('/api/problematic_stays/heatmap', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysHeatmap(agencyId, undefined, undefined, timePeriod),
             setData: setHeatmapData,
             setLoading: setIsHeatmapLoading
           },
           // Instant Departures
           {
-            request: axios.get('/api/problematic_stays/instant-departures', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysInstantDepartures(agencyId, timePeriod),
             setData: setInstantDeparturesData,
             setLoading: setIsInstantDeparturesLoading
           },
           // Ersatz-Analyse
           {
-            request: axios.get('/api/problematic_stays/replacement-analysis', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysReplacementAnalysis(agencyId, timePeriod),
             setData: setReplacementData,
             setLoading: setIsReplacementLoading
           },
           // Kundenzufriedenheit
           {
-            request: axios.get('/api/problematic_stays/customer-satisfaction', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysCustomerSatisfaction(agencyId, timePeriod),
             setData: setSatisfactionData,
             setLoading: setIsSatisfactionLoading
           },
           // Trend-Analyse (immer letztes Jahr)
           {
-            request: axios.get('/api/problematic_stays/trend-analysis', {
-              params: { agency_id: agencyId, time_period: 'last_year' }
-            }),
+            request: apiService.getProblematicStaysTrendAnalysis(agencyId, undefined, undefined, 'last_year'),
             setData: setTrendData,
             setLoading: setIsTrendLoading
           },
           // Abbrüche - Vorlaufzeit
           {
-            request: axios.get('/api/problematic_stays/cancellation-lead-time', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysCancellationLeadTime(agencyId, timePeriod),
             setData: setCancellationLeadTimeData,
             setLoading: setIsCancellationLeadTimeLoading
           }
@@ -145,8 +147,10 @@ const ProblematicStaysPage: React.FC = () => {
         await Promise.all(
           requests.map(async (item, index) => {
             try {
-              const response = await item.request;
-              item.setData(response.data.data);
+              const data = await item.request;
+              // API responses have a 'data' field containing the array, or the response itself is the data
+              const safeData = data && typeof data === 'object' ? data : {};
+              item.setData(safeData);
               item.setLoading(false);
               
               // Fortschritt aktualisieren
@@ -154,7 +158,13 @@ const ProblematicStaysPage: React.FC = () => {
               setLoadingProgress(Math.round((completedRequests / totalRequests) * 100));
             } catch (error) {
               console.error(`Fehler beim Laden (${index}):`, error);
+              // Set empty object as fallback data
+              item.setData({ data: [] });
               item.setLoading(false);
+              
+              // Update progress even on error
+              completedRequests++;
+              setLoadingProgress(Math.round((completedRequests / totalRequests) * 100));
             }
           })
         );
@@ -178,12 +188,12 @@ const ProblematicStaysPage: React.FC = () => {
     };
 
     fetchData();
-  }, [selectedAgency, timePeriod]);
+  }, [selectedAgency?.agency_id, timePeriod]);
 
   // Gesamtzahl der Einsätze extrahieren
-  const totalCareStays = overviewData && overviewData.length > 0 ? overviewData[0].total_carestays : 0;
-  const totalProblematic = overviewData && overviewData.length > 0 ? overviewData[0].total_problematic : 0;
-  const problematicPercentage = overviewData && overviewData.length > 0 ? overviewData[0].problematic_percentage : 0;
+  const totalCareStays = overviewData?.data && overviewData.data.length > 0 ? overviewData.data[0].total_carestays : 0;
+  const totalProblematic = overviewData?.data && overviewData.data.length > 0 ? overviewData.data[0].total_problematic : 0;
+  const problematicPercentage = overviewData?.data && overviewData.data.length > 0 ? overviewData.data[0].problematic_percentage : 0;
 
   // Lade-Overlay anzeigen, während die Daten geladen werden
   if (isPageLoading) {
@@ -232,7 +242,7 @@ const ProblematicStaysPage: React.FC = () => {
       </div>
 
       {/* Gesamtstatistik */}
-      {!isOverviewLoading && overviewData.length > 0 && (
+      {!isOverviewLoading && overviewData?.data && overviewData.data.length > 0 && (
         <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow p-4">
           <div className="flex flex-wrap items-center justify-between">
             <div className="flex items-center">
@@ -253,13 +263,13 @@ const ProblematicStaysPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <OverviewWidget 
-            data={overviewData} 
+            data={overviewData?.data || []} 
             isLoading={isOverviewLoading} 
           />
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <DistributionWidget 
-            data={overviewData} 
+            data={overviewData?.data || []} 
             isLoading={isOverviewLoading} 
           />
         </div>
@@ -270,7 +280,7 @@ const ProblematicStaysPage: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Problematische Einsätze - Zeitliche Entwicklung</h2>
           <TrendAnalysisWidget 
-            data={trendData} 
+            data={trendData?.data || []} 
             isLoading={isTrendLoading} 
           />
         </div>
@@ -282,7 +292,7 @@ const ProblematicStaysPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <ReasonListWidget 
-              reasonsData={reasonsData.filter(r => [
+              reasonsData={(reasonsData?.data || []).filter((r: any) => [
                 "BK - ohne Grund abgesagt",
                 "BK - hat besseres Jobangebot erhalten",
                 "BK - hat Verletzung",
@@ -297,7 +307,7 @@ const ProblematicStaysPage: React.FC = () => {
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <CancellationLeadTimeWidget 
-              data={cancellationLeadTimeData} 
+              data={cancellationLeadTimeData?.data || []} 
               isLoading={isCancellationLeadTimeLoading} 
             />
           </div>
@@ -310,14 +320,14 @@ const ProblematicStaysPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <InstantDepartureWidget 
-              data={overviewData} 
+              data={overviewData?.data || []} 
               isLoading={isOverviewLoading} 
-              detailedData={instantDeparturesData}
+              detailedData={instantDeparturesData?.data || []}
             />
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <ReasonListWidget 
-              reasonsData={reasonsData.filter(r => [
+              reasonsData={(reasonsData?.data || []).filter((r: any) => [
                 "BK - Deutschkenntnisse zu schlecht",
                 "BK - Pflegefähigkeiten zu schlecht - Transfer",
                 "BK- Pflegefähigkeiten zu schlecht - Grundpflege",
@@ -339,8 +349,8 @@ const ProblematicStaysPage: React.FC = () => {
         <div className="grid grid-cols-1 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <TimeAnalysisWidget 
-              data={timeAnalysisData} 
-              isLoading={isTimeAnalysisLoading} 
+              data={overviewData?.data || []} 
+              isLoading={isOverviewLoading} 
               eventType="shortened_after_arrival"
               title="Verkürzungsdauer-Analyse"
             />
@@ -349,7 +359,7 @@ const ProblematicStaysPage: React.FC = () => {
         <div className="grid grid-cols-1 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <CustomerSatisfactionWidget 
-              data={satisfactionData} 
+              data={satisfactionData?.data || []} 
               isLoading={isSatisfactionLoading} 
             />
           </div>

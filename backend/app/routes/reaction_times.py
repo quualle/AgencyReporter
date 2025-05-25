@@ -4,6 +4,7 @@ from ..utils.bigquery_connection import BigQueryConnection
 from ..models import ResponseTimeData as ReactionTimeData, TimeFilter, AgencyRequest, ResponseTimeComparison as ReactionTimeComparison
 from ..dependencies import get_settings
 from ..utils.query_manager import QueryManager
+from ..services.database_cache_service import get_cache_service
 
 router = APIRouter()
 
@@ -16,12 +17,35 @@ async def get_agency_reaction_times(
     Get reaction times for a specific agency
     """
     try:
+        # Check cache first
+        cache_service = get_cache_service()
+        endpoint = f"/reaction_times/{agency_id}"
+        cache_key = cache_service.create_cache_key(endpoint, {"time_period": time_period})
+        cached_data = await cache_service.get_cached_data(cache_key)
+        if cached_data is not None:
+            cached_result = cached_data.get("data", cached_data)
+            # Convert dict to ReactionTimeData if needed
+            if isinstance(cached_result, dict):
+                return ReactionTimeData(**cached_result)
+            return cached_result
+        
         bq = BigQueryConnection()
         reaction_time_data = bq.get_response_times_by_agency(agency_id, time_period)
         
         # If no data is found
         if not reaction_time_data:
-            return ReactionTimeData(agency_id=agency_id)
+            reaction_time_data = ReactionTimeData(agency_id=agency_id)
+        
+        # Save to cache (convert to dict for serialization)
+        data_dict = reaction_time_data.dict() if hasattr(reaction_time_data, 'dict') else reaction_time_data
+        await cache_service.save_cached_data(
+            cache_key=cache_key,
+            data={"data": data_dict},
+            endpoint=endpoint,
+            agency_id=agency_id,
+            time_period=time_period,
+            expires_hours=48
+        )
         
         return reaction_time_data
     except Exception as e:
@@ -227,6 +251,19 @@ async def get_arrival_to_cancellation_stats(
     Aufgeteilt in: overall, first_stays (Neukunden), followup_stays (Wechsel)
     """
     try:
+        # Check cache first
+        cache_service = get_cache_service()
+        endpoint = f"/reaction_times/{agency_id}/arrival_to_cancellation"
+        params = {"time_period": time_period}
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+        cache_key = cache_service.create_cache_key(endpoint, params)
+        cached_data = await cache_service.get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data.get("data", cached_data)
+        
         bq = BigQueryConnection()
         if not start_date or not end_date:
             from ..utils.query_manager import QueryManager
@@ -235,7 +272,8 @@ async def get_arrival_to_cancellation_stats(
         stats = bq.get_arrival_to_cancellation_stats(agency_id, start_date, end_date)
         def fmt(val):
             return f"{val:.2f}" if val is not None else None
-        return {
+        
+        result = {
             "agency_id": agency_id,
             "overall": {
                 "median_hours": fmt(stats["overall"]["median_hours"]) if stats["overall"] else None,
@@ -252,6 +290,18 @@ async def get_arrival_to_cancellation_stats(
             "start_date": start_date,
             "end_date": end_date
         }
+        
+        # Save to cache
+        await cache_service.save_cached_data(
+            cache_key=cache_key,
+            data={"data": result},
+            endpoint=endpoint,
+            agency_id=agency_id,
+            time_period=time_period,
+            expires_hours=48
+        )
+        
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch arrival_to_cancellation stats: {str(e)}")
 

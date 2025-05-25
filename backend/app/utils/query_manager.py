@@ -809,7 +809,7 @@ class QueryManager:
         elif time_period == "last_year":
             start_date = end_date - timedelta(days=365)
         elif time_period == "all_time":
-            start_date = datetime(2000, 1, 1)  # Very old date to include all data
+            start_date = datetime(2020, 1, 1)  # Start from reasonable date to include all relevant data
         else:
             # Default to last quarter
             start_date = end_date - timedelta(days=90)

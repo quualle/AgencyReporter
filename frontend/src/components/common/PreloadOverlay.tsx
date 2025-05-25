@@ -15,7 +15,9 @@ const PreloadOverlay: React.FC = () => {
   }
 
   // Berechne Fortschritt in Prozent
-  const progress = preloadStatus.completedRequests / Math.max(preloadStatus.totalRequests, 1) * 100;
+  const progress = preloadStatus.totalRequests > 0 
+    ? (preloadStatus.completedRequests / preloadStatus.totalRequests) * 100 
+    : 0;
   
   // Wenn der Ladevorgang abgeschlossen ist und kein Fehler aufgetreten ist,
   // schließe den Overlay nach 2 Sekunden
@@ -51,8 +53,10 @@ const PreloadOverlay: React.FC = () => {
 
           {/* Numerischer Fortschritt */}
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            {preloadStatus.completedRequests} von {preloadStatus.totalRequests} Abfragen abgeschlossen
-            ({Math.round(progress)}%)
+            {preloadStatus.totalRequests > 0 
+              ? `${preloadStatus.completedRequests} von ${preloadStatus.totalRequests} Abfragen abgeschlossen (${Math.round(progress)}%)`
+              : `${preloadStatus.completedRequests} Abfragen abgeschlossen${preloadStatus.inProgress ? '...' : ''}`
+            }
             {preloadStatus.cachedEndpoints !== undefined && preloadStatus.cachedEndpoints > 0 && (
               <span className="ml-2 text-green-500">
                 ({preloadStatus.cachedEndpoints} aus Cache)

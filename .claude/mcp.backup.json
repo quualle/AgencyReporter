@@ -1,0 +1,26 @@
+{
+  "sqlite": {
+    "command": "uvx",
+    "args": [
+      "mcp-server-sqlite",
+      "--db-path",
+      "/Users/marcoheer/agency_cache.db"
+    ]
+  },
+  "supabase": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "@supabase/mcp-server-supabase@latest",
+      "--access-token",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvZHFzZm9jenhyYWppbHB4bm1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MTk5MDIsImV4cCI6MjA2MjA5NTkwMn0._7pOvfzkM4_ugpI-cC7F4rV4lzKR8VWfzfvkcUsGgB8"
+    ]
+  },
+  "context7": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "@upstash/context7-mcp@latest"
+    ]
+  }
+}

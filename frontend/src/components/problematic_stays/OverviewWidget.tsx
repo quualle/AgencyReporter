@@ -26,8 +26,12 @@ interface OverviewWidgetProps {
 }
 
 const OverviewWidget: React.FC<OverviewWidgetProps> = ({ data, isLoading }) => {
+  // Debug logging
+  console.log('OverviewWidget received:', { data, isLoading, dataLength: data?.length });
+  
   // Wenn noch keine Daten geladen sind oder das Datenformat nicht stimmt
   if (isLoading || !data || data.length === 0) {
+    console.log('OverviewWidget showing gray skeleton:', { isLoading, hasData: !!data, dataLength: data?.length });
     return (
       <div className="animate-pulse">
         <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 h-48 mb-4"></div>

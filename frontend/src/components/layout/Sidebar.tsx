@@ -2,7 +2,8 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAppStore } from '../../store/appStore';
 import TimeFilter from '../common/TimeFilter';
-import { preloadService } from '../../services/api';
+import CacheStats from '../common/CacheStats';
+import { preloadService, databaseCacheService } from '../../services/api';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
@@ -27,20 +28,75 @@ const Sidebar: React.FC = () => {
     
     // Initialisiere den Preload-Status
     setPreloadStatus({
-      totalRequests: 1,
+      totalRequests: 0,
       completedRequests: 0,
       inProgress: true,
-      status: 'Initialisiere Datenladung...'
+      status: 'Prüfe Datenaktualität...'
     });
     
-    // Starte den Preload-Prozess
-    await preloadService.preloadAllData(
-      selectedAgency.agency_id,
-      (progress) => {
-        // Aktualisiere den Status im Store
-        setPreloadStatus(progress);
-      }
-    );
+    try {
+      // Starte den neuen Database-Preload-Prozess
+      await preloadService.preloadAllDataWithDatabase(
+        selectedAgency.agency_id,
+        (progress) => {
+          // Aktualisiere den Status im Store
+          setPreloadStatus(progress);
+        }
+      );
+    } catch (error) {
+      console.error('Database preload failed, falling back to legacy preload:', error);
+      
+      // Fallback auf legacy preload bei Fehlern
+      setPreloadStatus({
+        totalRequests: 0,
+        completedRequests: 0,
+        inProgress: true,
+        status: 'Fallback: Lade Daten ohne Datenbank...'
+      });
+      
+      await preloadService.preloadAllDataWithDatabase(
+        selectedAgency.agency_id,
+        (progress) => {
+          setPreloadStatus({
+            ...progress,
+            status: `Fallback: ${progress.status}`
+          });
+        }
+      );
+    }
+  };
+
+  const handleComprehensivePreloadClick = async () => {
+    // Zeige das Overlay an
+    setShowPreloadOverlay(true);
+    
+    // Initialisiere den Preload-Status
+    setPreloadStatus({
+      totalRequests: 0,
+      completedRequests: 0,
+      inProgress: true,
+      status: 'Starte umfassende Datenladung für alle Agenturen...'
+    });
+    
+    try {
+      // Starte den umfassenden Preload-Prozess
+      await preloadService.preloadComprehensiveData(
+        (progress) => {
+          // Aktualisiere den Status im Store
+          setPreloadStatus(progress);
+        }
+      );
+    } catch (error) {
+      console.error('Comprehensive preload failed:', error);
+      
+      setPreloadStatus({
+        totalRequests: 0,
+        completedRequests: 0,
+        inProgress: false,
+        status: 'Fehler bei der umfassenden Datenladung',
+        error: error instanceof Error ? error.message : 'Unbekannter Fehler'
+      });
+    }
   };
 
   return (
@@ -183,7 +239,16 @@ const Sidebar: React.FC = () => {
           <TimeFilter />
         </div>
         
-        <div className="mt-8">
+        {selectedAgency && (
+          <div className="mt-6">
+            <CacheStats 
+              agencyId={selectedAgency.agency_id} 
+              showDetails={true}
+            />
+          </div>
+        )}
+        
+        <div className="mt-8 space-y-3">
           <button
             onClick={handlePreloadClick}
             disabled={!selectedAgency || (preloadStatus?.inProgress || false)}
@@ -200,10 +265,35 @@ const Sidebar: React.FC = () => {
               ? `Lädt... (${preloadStatus.completedRequests}/${preloadStatus.totalRequests})` 
               : 'Alle Daten laden'}
           </button>
+          
+          <button
+            onClick={handleComprehensivePreloadClick}
+            disabled={preloadStatus?.inProgress || false}
+            className={`w-full flex items-center justify-center px-4 py-3 rounded-md text-sm
+              ${preloadStatus?.inProgress || false
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
+                : 'bg-orange-600 text-white hover:bg-orange-700 dark:bg-orange-700 dark:hover:bg-orange-800'
+              } transition-colors duration-200 ease-in-out`}
+            title="Lädt Daten für ALLE Agenturen und Zeiträume (10-30 Minuten)"
+          >
+            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+            </svg>
+            {preloadStatus?.inProgress 
+              ? `Lädt umfassend...` 
+              : 'Alle Agenturen laden'}
+          </button>
+          
           {preloadStatus && !preloadStatus.inProgress && !preloadStatus.error && (
             <p className="text-xs text-green-600 mt-2 text-center">
               Daten erfolgreich geladen!
             </p>
+          )}
+          
+          {preloadStatus?.inProgress && (
+            <div className="text-xs text-gray-600 dark:text-gray-400 text-center mt-2">
+              {preloadStatus.status}
+            </div>
           )}
         </div>
       </div>

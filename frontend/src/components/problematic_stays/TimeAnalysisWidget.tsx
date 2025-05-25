@@ -19,8 +19,20 @@ const TimeAnalysisWidget: React.FC<TimeAnalysisWidgetProps> = ({
 }) => {
   const [stayType, setStayType] = useState<string>('all'); // 'all', 'first_stay', 'follow_stay'
 
+  // Debug: Log data structure details
+  if (data?.length > 0) {
+    console.log('TimeAnalysisWidget - First item structure:', JSON.stringify(data[0], null, 2));
+    console.log('TimeAnalysisWidget - Required fields check:', {
+      cancelled_1_3_days: data[0].cancelled_1_3_days,
+      shortened_14_21_days: data[0].shortened_14_21_days,
+      first_stay_avg_days_before_arrival: data[0].first_stay_avg_days_before_arrival,
+      first_stay_avg_shortened_days: data[0].first_stay_avg_shortened_days
+    });
+  }
+  
   // Wenn noch keine Daten geladen sind oder das Datenformat nicht stimmt
   if (isLoading || !data || data.length === 0) {
+    console.log('TimeAnalysisWidget showing loading state:', { isLoading, dataLength: data?.length });
     return (
       <div className="h-64 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse"></div>
     );

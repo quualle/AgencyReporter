@@ -4,6 +4,7 @@ from ..utils.query_manager import QueryManager
 from ..utils.bigquery_connection import BigQueryConnection
 from ..models import TimeFilter, AgencyRequest
 from ..dependencies import get_settings
+from ..services.database_cache_service import get_cache_service
 from ..queries.problematic_stays.queries import (
     GET_PROBLEMATIC_STAYS_OVERVIEW,
     GET_PROBLEMATIC_STAYS_REASONS,
@@ -30,6 +31,14 @@ async def get_problematic_stays_overview(
     Event-Typ, Stay-Typ, Ersatzstellungen und Kundenzufriedenheit.
     """
     try:
+        # Check cache first
+        cache_service = get_cache_service()
+        endpoint = f"/problematic_stays/overview"
+        cache_key = cache_service.create_cache_key(endpoint, {"agency_id": agency_id, "time_period": time_period})
+        cached_data = await cache_service.get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data.get("data", cached_data)
+        
         # Setup date range based on time_period
         today = datetime.now()
         
@@ -57,7 +66,7 @@ async def get_problematic_stays_overview(
         # Process and format the results
         if not results or len(results) == 0:
             # Return empty results if no data found
-            return {
+            result = {
                 "agency_id": agency_id,
                 "time_period": time_period,
                 "start_date": start_date,
@@ -65,26 +74,38 @@ async def get_problematic_stays_overview(
                 "data": [],
                 "count": 0
             }
+        else:
+            # Process the results into a list of dictionaries
+            overview_data = []
+            for row in results:
+                # Convert BigQuery row to dictionary
+                overview_item = dict(row.items())
+                # Round float values for better readability
+                for key, value in overview_item.items():
+                    if isinstance(value, float):
+                        overview_item[key] = round(value, 2)
+                overview_data.append(overview_item)
+                
+            result = {
+                "agency_id": agency_id,
+                "time_period": time_period,
+                "start_date": start_date,
+                "end_date": end_date,
+                "data": overview_data,
+                "count": len(overview_data)
+            }
         
-        # Process the results into a list of dictionaries
-        overview_data = []
-        for row in results:
-            # Convert BigQuery row to dictionary
-            overview_item = dict(row.items())
-            # Round float values for better readability
-            for key, value in overview_item.items():
-                if isinstance(value, float):
-                    overview_item[key] = round(value, 2)
-            overview_data.append(overview_item)
-            
-        return {
-            "agency_id": agency_id,
-            "time_period": time_period,
-            "start_date": start_date,
-            "end_date": end_date,
-            "data": overview_data,
-            "count": len(overview_data)
-        }
+        # Save to cache
+        await cache_service.save_cached_data(
+            cache_key=cache_key,
+            data={"data": result},
+            endpoint=endpoint,
+            agency_id=agency_id,
+            time_period=time_period,
+            expires_hours=48
+        )
+        
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays overview: {str(e)}")
 

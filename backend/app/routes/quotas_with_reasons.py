@@ -4,6 +4,7 @@ from ..utils.query_manager import QueryManager
 from ..utils.bigquery_connection import BigQueryConnection
 from ..models import TimeFilter, AgencyRequest
 from ..dependencies import get_settings
+from ..services.database_cache_service import get_cache_service
 from ..queries.quotas.quotas_with_reasons import GET_ALL_PROBLEM_CASES
 from datetime import datetime, timedelta
 
@@ -18,12 +19,20 @@ async def get_agency_cancellation_reasons(
     Get cancellation reasons for a specific agency analyzed by LLM
     """
     try:
+        # Check cache first
+        cache_service = get_cache_service()
+        endpoint = f"/quotas_with_reasons/{agency_id}/cancellation-reasons"
+        cache_key = cache_service.create_cache_key(endpoint, {"agency_id": agency_id, "time_period": time_period})
+        cached_data = await cache_service.get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data.get("data", cached_data)
+        
         # Use the query manager to get quotas and related data
         query_manager = QueryManager()
         
         # For now, we'll return mock data
         # In the future, this will be connected to real LLM analysis
-        return {
+        result = {
             "agency_id": agency_id,
             "time_period": time_period,
             "cancellation_reasons": {
@@ -35,6 +44,18 @@ async def get_agency_cancellation_reasons(
             },
             "total_cancellations": 21
         }
+        
+        # Save to cache
+        await cache_service.save_cached_data(
+            cache_key=cache_key,
+            data={"data": result},
+            endpoint=endpoint,
+            agency_id=agency_id,
+            time_period=time_period,
+            expires_hours=48
+        )
+        
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch cancellation reasons: {str(e)}")
 
@@ -47,12 +68,20 @@ async def get_agency_early_end_reasons(
     Get reasons for early ending of services for a specific agency analyzed by LLM
     """
     try:
+        # Check cache first
+        cache_service = get_cache_service()
+        endpoint = f"/quotas_with_reasons/{agency_id}/early-end-reasons"
+        cache_key = cache_service.create_cache_key(endpoint, {"agency_id": agency_id, "time_period": time_period})
+        cached_data = await cache_service.get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data.get("data", cached_data)
+        
         # Use the query manager to get quotas and related data
         query_manager = QueryManager()
         
         # For now, we'll return mock data
         # In the future, this will be connected to real LLM analysis
-        return {
+        result = {
             "agency_id": agency_id,
             "time_period": time_period,
             "early_end_reasons": {
@@ -64,6 +93,18 @@ async def get_agency_early_end_reasons(
             },
             "total_early_ends": 24
         }
+        
+        # Save to cache
+        await cache_service.save_cached_data(
+            cache_key=cache_key,
+            data={"data": result},
+            endpoint=endpoint,
+            agency_id=agency_id,
+            time_period=time_period,
+            expires_hours=48
+        )
+        
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch early end reasons: {str(e)}")
 

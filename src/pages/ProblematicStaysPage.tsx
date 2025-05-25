@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
-import axios from 'axios';
-
+import { apiService } from '../services/api';
 import InstantDepartureWidget from '../components/problematic_stays/InstantDepartureWidget';
 import CustomerSatisfactionWidget from '../components/problematic_stays/CustomerSatisfactionWidget';
 import TrendAnalysisWidget from '../components/problematic_stays/TrendAnalysisWidget';
@@ -10,8 +9,11 @@ import DistributionWidget from '../components/problematic_stays/DistributionWidg
 import CancellationLeadTimeWidget from '../components/problematic_stays/CancellationLeadTimeWidget';
 import ReasonListWidget from '../components/problematic_stays/ReasonListWidget';
 import TimeAnalysisWidget from '../components/problematic_stays/TimeAnalysisWidget';
-
 import AgencySelector from '../components/common/AgencySelector';
+
+console.log('🔥 ProblematicStaysPage LOADED - NEW VERSION WITH APISERVICE');
+console.log('🔥 apiService imported:', apiService);
+console.log('🔥 getProblematicStaysOverview method:', apiService.getProblematicStaysOverview);
 
 const ProblematicStaysPage: React.FC = () => {
   const { timePeriod, selectedAgency, setActiveTab } = useAppStore();
@@ -51,88 +53,74 @@ const ProblematicStaysPage: React.FC = () => {
   // Daten laden
   useEffect(() => {
     const fetchData = async () => {
+      console.log('🔥 Starting fetchData function');
       // Seite als "wird geladen" markieren
       setIsPageLoading(true);
       setLoadingProgress(0);
       
-      const agencyId = selectedAgency ? selectedAgency.agency_id : null;
+      const agencyId = selectedAgency ? selectedAgency.agency_id : undefined;
+      console.log('🔥 Using agencyId:', agencyId, 'timePeriod:', timePeriod);
       
       try {
         // Alle Anfragen parallel starten anstatt sequentiell
         const requests = [
           // Übersichtsdaten
           {
-            request: axios.get('/api/problematic_stays/overview', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysOverview(agencyId, timePeriod),
             setData: setOverviewData,
             setLoading: setIsOverviewLoading
           },
           // Gründe
           {
-            request: axios.get('/api/problematic_stays/reasons', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysReasons(agencyId, undefined, timePeriod),
             setData: setReasonsData,
             setLoading: setIsReasonsLoading
           },
           // Zeitliche Analyse
           {
-            request: axios.get('/api/problematic_stays/time-analysis', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysTimeAnalysis(agencyId, undefined, undefined, timePeriod),
             setData: setTimeAnalysisData,
             setLoading: setIsTimeAnalysisLoading
           },
           // Heatmap-Daten
           {
-            request: axios.get('/api/problematic_stays/heatmap', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysHeatmap(agencyId, undefined, undefined, timePeriod),
             setData: setHeatmapData,
             setLoading: setIsHeatmapLoading
           },
           // Instant Departures
           {
-            request: axios.get('/api/problematic_stays/instant-departures', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysInstantDepartures(agencyId, timePeriod),
             setData: setInstantDeparturesData,
             setLoading: setIsInstantDeparturesLoading
           },
           // Ersatz-Analyse
           {
-            request: axios.get('/api/problematic_stays/replacement-analysis', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysReplacementAnalysis(agencyId, timePeriod),
             setData: setReplacementData,
             setLoading: setIsReplacementLoading
           },
           // Kundenzufriedenheit
           {
-            request: axios.get('/api/problematic_stays/customer-satisfaction', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysCustomerSatisfaction(agencyId, timePeriod),
             setData: setSatisfactionData,
             setLoading: setIsSatisfactionLoading
           },
           // Trend-Analyse (immer letztes Jahr)
           {
-            request: axios.get('/api/problematic_stays/trend-analysis', {
-              params: { agency_id: agencyId, time_period: 'last_year' }
-            }),
+            request: apiService.getProblematicStaysTrendAnalysis(agencyId, undefined, undefined, 'last_year'),
             setData: setTrendData,
             setLoading: setIsTrendLoading
           },
           // Abbrüche - Vorlaufzeit
           {
-            request: axios.get('/api/problematic_stays/cancellation-lead-time', {
-              params: { agency_id: agencyId, time_period: timePeriod }
-            }),
+            request: apiService.getProblematicStaysCancellationLeadTime(agencyId, timePeriod),
             setData: setCancellationLeadTimeData,
             setLoading: setIsCancellationLeadTimeLoading
           }
         ];
+        
+        console.log('🔥 Created', requests.length, 'API requests');
         
         // Alle Ladestates auf "laden" setzen
         requests.forEach(item => item.setLoading(true));
@@ -145,24 +133,35 @@ const ProblematicStaysPage: React.FC = () => {
         await Promise.all(
           requests.map(async (item, index) => {
             try {
-              const response = await item.request;
-              item.setData(response.data.data);
+              console.log(`🔥 Executing request ${index + 1}/${totalRequests}`);
+              const data = await item.request;
+              console.log(`🔥 Request ${index + 1} completed, got data:`, data);
+              // API responses have a 'data' field containing the array, or the response itself is the data
+              const safeData = data && typeof data === 'object' ? data : {};
+              item.setData(safeData);
               item.setLoading(false);
               
               // Fortschritt aktualisieren
               completedRequests++;
               setLoadingProgress(Math.round((completedRequests / totalRequests) * 100));
             } catch (error) {
-              console.error(`Fehler beim Laden (${index}):`, error);
+              console.error(`🔥 Fehler beim Laden (${index}):`, error);
+              // Set empty object as fallback data
+              item.setData({ data: [] });
               item.setLoading(false);
+              
+              // Update progress even on error
+              completedRequests++;
+              setLoadingProgress(Math.round((completedRequests / totalRequests) * 100));
             }
           })
         );
         
+        console.log('🔥 All requests completed');
         // Seite als "geladen" markieren
         setIsPageLoading(false);
       } catch (error) {
-        console.error('Fehler beim Laden der Daten:', error);
+        console.error('🔥 Fehler beim Laden der Daten:', error);
         // Bei Fehler auch Ladevorgang beenden
         setIsOverviewLoading(false);
         setIsReasonsLoading(false);
@@ -249,10 +248,6 @@ const ProblematicStaysPage: React.FC = () => {
         </div>
       )}
 
-      <div className="mb-6">
-        <AgencySelector />
-      </div>
-
       {/* Übersichts-Widgets */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
@@ -286,7 +281,7 @@ const ProblematicStaysPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <ReasonListWidget 
-              reasonsData={reasonsData.filter(r => [
+              reasonsData={reasonsData.filter((r: any) => [
                 "BK - ohne Grund abgesagt",
                 "BK - hat besseres Jobangebot erhalten",
                 "BK - hat Verletzung",
@@ -321,7 +316,7 @@ const ProblematicStaysPage: React.FC = () => {
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <ReasonListWidget 
-              reasonsData={reasonsData.filter(r => [
+              reasonsData={reasonsData.filter((r: any) => [
                 "BK - Deutschkenntnisse zu schlecht",
                 "BK - Pflegefähigkeiten zu schlecht - Transfer",
                 "BK- Pflegefähigkeiten zu schlecht - Grundpflege",
@@ -363,4 +358,4 @@ const ProblematicStaysPage: React.FC = () => {
   );
 };
 
-export default ProblematicStaysPage; 
+export default ProblematicStaysPage;
