@@ -791,8 +791,8 @@ async def get_problematic_stays_cancellation_lead_time(
 @router.get("/details/{agency_id}")
 async def get_problematic_stays_details(
     agency_id: str,
-    time_period: str = Query("last_quarter", description="Time period filter"),
-    event_type: Optional[str] = Query(None, description="Filter by event type (early_end, instant_departure, before_3_days)")
+    time_period: str = QueryParam("last_quarter", description="Time period filter"),
+    event_type: Optional[str] = QueryParam(None, description="Filter by event type (early_end, instant_departure, before_3_days)")
 ):
     """
     Get detailed list of individual problematic stays for an agency.
