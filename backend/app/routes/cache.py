@@ -59,7 +59,7 @@ async def get_cache_stats():
         
         # Erweitere die Statistiken um kategorisierte Daten
         db_manager = cache_service.db_manager
-        async with db_manager.get_session() as session:
+        async with db_manager.get_async_session() as session:
             # Dashboard-spezifische Einträge (all-agencies endpoints)
             dashboard_query = text("""SELECT COUNT(*) as count, 
                                SUM(CASE WHEN expires_at > datetime('now') THEN 1 ELSE 0 END) as fresh,
@@ -93,19 +93,19 @@ async def get_cache_stats():
             # Füge die kategorisierten Stats hinzu
             stats['category_stats'] = {
                 'dashboard': {
-                    'entries': dashboard_stats['count'] or 0,
-                    'fresh': dashboard_stats['fresh'] or 0,
-                    'stale': dashboard_stats['stale'] or 0
+                    'entries': dashboard_stats[0] or 0 if dashboard_stats else 0,
+                    'fresh': dashboard_stats[1] or 0 if dashboard_stats else 0,
+                    'stale': dashboard_stats[2] or 0 if dashboard_stats else 0
                 },
                 'agency_specific': {
-                    'entries': agency_stats['count'] or 0,
-                    'fresh': agency_stats['fresh'] or 0,
-                    'stale': agency_stats['stale'] or 0
+                    'entries': agency_stats[0] or 0 if agency_stats else 0,
+                    'fresh': agency_stats[1] or 0 if agency_stats else 0,
+                    'stale': agency_stats[2] or 0 if agency_stats else 0
                 },
                 'overall': {
-                    'entries': overall_stats['count'] or 0,
-                    'fresh': overall_stats['fresh'] or 0,
-                    'stale': overall_stats['stale'] or 0
+                    'entries': overall_stats[0] or 0 if overall_stats else 0,
+                    'fresh': overall_stats[1] or 0 if overall_stats else 0,
+                    'stale': overall_stats[2] or 0 if overall_stats else 0
                 }
             }
         

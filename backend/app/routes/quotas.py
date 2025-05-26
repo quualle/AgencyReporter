@@ -514,13 +514,21 @@ async def get_cancellations_before_arrival_details(
             if not agency_name or agency_name == "Unknown":
                 agency_name = row.get("agency_name", "Unknown")
                 
+            # Helper function to format dates
+            def format_date(date_value):
+                if not date_value:
+                    return None
+                if hasattr(date_value, 'isoformat'):
+                    return date_value.isoformat()
+                return str(date_value)
+            
             detail = {
                 "care_stay_id": row.get("care_stay_id"),
                 "customer_name": row.get("customer_name"),
                 "customer_city": row.get("customer_city"),
-                "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
-                "planned_arrival": row.get("planned_arrival").isoformat() if row.get("planned_arrival") else None,
-                "cancelled_at": row.get("cancelled_at").isoformat() if row.get("cancelled_at") else None,
+                "created_at": format_date(row.get("created_at")),
+                "planned_arrival": format_date(row.get("planned_arrival")),
+                "cancelled_at": format_date(row.get("cancelled_at")),
                 "cancellation_reason": row.get("cancellation_reason"),
                 "days_before_arrival": row.get("days_before_arrival")
             }
@@ -738,12 +746,20 @@ async def get_early_terminations_details(
             if not agency_name or agency_name == "Unknown":
                 agency_name = row.get("agency_name", "Unknown")
                 
+            # Helper function to format dates
+            def format_date(date_value):
+                if not date_value:
+                    return None
+                if hasattr(date_value, 'isoformat'):
+                    return date_value.isoformat()
+                return str(date_value)
+            
             detail = {
                 "care_stay_id": row.get("care_stay_id"),
                 "customer_name": row.get("customer_name"),
                 "customer_city": row.get("customer_city"),
-                "arrival": row.get("arrival").isoformat() if row.get("arrival") else None,
-                "departure": row.get("departure").isoformat() if row.get("departure") else None,
+                "arrival": format_date(row.get("arrival")),
+                "departure": format_date(row.get("departure")),
                 "actual_duration_days": row.get("actual_duration_days"),
                 "planned_duration_days": row.get("planned_duration_days"),
                 "reduction_percentage": round(row.get("reduction_percentage", 0) * 100, 1) if row.get("reduction_percentage") else 0,
