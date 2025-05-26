@@ -445,20 +445,24 @@ async def get_cancellations_before_arrival_details(
         
         query_manager = QueryManager()
         
-        # Build the query
+        # Build the query - using tracks for cancellation info
         query = """
         WITH cancellation_details AS (
             SELECT
                 cs._id as care_stay_id,
                 cs.created_at,
                 cs.arrival as planned_arrival,
-                cs.cancelled_at,
-                cs.cancellation_reason,
-                p.name as customer_name,
-                p.city as customer_city,
+                cs.rejection_reason as cancellation_reason,
+                CONCAT(cr.first_name, ' ', cr.last_name) as customer_name,
+                cr.location as customer_city,
                 c.agency_id,
                 a.name as agency_name,
-                DATE_DIFF(DATE(cs.arrival), DATE(cs.cancelled_at), DAY) as days_before_arrival
+                -- Extract cancellation date from tracks
+                (SELECT TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at'))
+                 FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+                 WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Abgebrochen'
+                 ORDER BY JSON_EXTRACT_SCALAR(track, '$.created_at') DESC
+                 LIMIT 1) as cancelled_at
             FROM
                 `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
             JOIN
@@ -466,14 +470,14 @@ async def get_cancellations_before_arrival_details(
             JOIN
                 `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
             JOIN
-                `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.postings` p ON c.posting_id = p._id
+                `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.households` h ON c.household_id = h._id
+            LEFT JOIN
+                `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_receivers` cr ON cr.household_id = h._id
             WHERE
                 c.agency_id = @agency_id
                 AND cs.created_at BETWEEN @start_date AND @end_date
                 AND cs.stage = 'Abgebrochen'
-                AND cs.cancelled_at IS NOT NULL
                 AND cs.arrival IS NOT NULL
-                AND DATE(cs.cancelled_at) < DATE(cs.arrival)
                 -- Confirmed before cancellation
                 AND EXISTS (
                     SELECT 1
@@ -481,7 +485,12 @@ async def get_cancellations_before_arrival_details(
                     WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
                 )
         )
-        SELECT * FROM cancellation_details
+        SELECT 
+            *,
+            DATE_DIFF(DATE(planned_arrival), DATE(cancelled_at), DAY) as days_before_arrival
+        FROM cancellation_details
+        WHERE cancelled_at IS NOT NULL
+          AND cancelled_at < TIMESTAMP(planned_arrival)
         ORDER BY cancelled_at DESC
         """
         
@@ -589,11 +598,11 @@ async def get_early_terminations_details(
                     cs.departure,
                     cs.created_at,
                     cs.stage,
-                    cs.end_reason,
+                    cs.rejection_reason as end_reason,
                     c.agency_id,
                     a.name as agency_name,
-                    p.name as customer_name,
-                    p.city as customer_city,
+                    CONCAT(cr.first_name, ' ', cr.last_name) as customer_name,
+                    cr.location as customer_city,
                     JSON_EXTRACT_ARRAY(cs.tracks) AS track_array,
                     -- Calculate actual stay duration
                     DATE_DIFF(DATE(cs.departure), DATE(cs.arrival), DAY) as actual_duration_days
@@ -604,7 +613,9 @@ async def get_early_terminations_details(
                 JOIN
                     `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
                 JOIN
-                    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.postings` p ON c.posting_id = p._id
+                    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.households` h ON c.household_id = h._id
+                LEFT JOIN
+                    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_receivers` cr ON cr.household_id = h._id
                 WHERE
                     c.agency_id = @agency_id
                     AND cs.created_at BETWEEN @start_date AND @end_date

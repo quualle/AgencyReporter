@@ -833,12 +833,17 @@ async def get_problematic_stays_details(
                 cs.arrival,
                 cs.departure,
                 cs.stage,
-                cs.cancelled_at,
-                cs.cancellation_reason,
-                cs.ended_at,
-                cs.end_reason,
-                p.name as customer_name,
-                p.city as customer_city,
+                -- Extract cancellation info from tracks
+                (SELECT TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at'))
+                 FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+                 WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Abgebrochen'
+                 ORDER BY JSON_EXTRACT_SCALAR(track, '$.created_at') DESC
+                 LIMIT 1) as cancelled_at,
+                cs.rejection_reason as cancellation_reason,
+                cs.updated_at as ended_at,
+                cs.rejection_reason as end_reason,
+                c.customer_name,
+                c.customer_city,
                 c.agency_id,
                 a.name as agency_name,
                 -- Determine problematic type
@@ -869,16 +874,25 @@ async def get_problematic_stays_details(
                 `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
             JOIN
                 `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
-            JOIN
-                `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.postings` p ON c.posting_id = p._id
             WHERE
                 c.agency_id = @agency_id
                 AND cs.created_at BETWEEN @start_date AND @end_date
                 AND (
                     -- Include based on problem type
-                    (cs.stage = 'Abgebrochen' AND cs.cancelled_at IS NOT NULL AND cs.arrival IS NOT NULL AND DATE(cs.cancelled_at) < DATE(cs.arrival))
-                    OR (cs.ended_at IS NOT NULL AND cs.arrival IS NOT NULL AND cs.departure IS NOT NULL AND DATE_DIFF(DATE(cs.departure), DATE(cs.arrival), DAY) <= 3)
-                    OR (cs.ended_at IS NOT NULL AND cs.arrival IS NOT NULL AND cs.departure IS NOT NULL AND cs.ended_at < cs.departure)
+                    -- Abbruch vor Anreise
+                    (cs.stage = 'Abgebrochen' AND cs.arrival IS NOT NULL 
+                     AND EXISTS (
+                        SELECT 1
+                        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+                        WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Abgebrochen'
+                          AND TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at')) < TIMESTAMP(cs.arrival)
+                     ))
+                    -- Sofortabreise (≤3 Tage)
+                    OR (cs.arrival IS NOT NULL AND cs.departure IS NOT NULL 
+                        AND DATE_DIFF(DATE(cs.departure), DATE(cs.arrival), DAY) <= 3)
+                    -- Vorzeitige Beendigung
+                    OR (cs.arrival IS NOT NULL AND cs.departure IS NOT NULL 
+                        AND cs.departure < cs.arrival) -- This will be filtered later in the query
                 )
         )
         SELECT * FROM problematic_details
