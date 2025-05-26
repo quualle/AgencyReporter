@@ -1019,12 +1019,20 @@ agency_completed AS (
     -- Verlängerung (neues Datum später als ursprüngliches)
     SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.new_departure) > SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure)
     OR
-    -- Nur leichte Verkürzung (maximal 14 Tage früher)
-    TIMESTAMP_DIFF(
-      SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure),
-      SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.new_departure),
-      DAY
-    ) <= 14
+    -- Nur moderate Verkürzung (maximal 33% der geplanten Dauer)
+    -- Berechnung: (geplante_dauer - tatsächliche_dauer) / geplante_dauer <= 0.33
+    SAFE_DIVIDE(
+      TIMESTAMP_DIFF(
+        SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure),
+        SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.new_departure),
+        DAY
+      ),
+      TIMESTAMP_DIFF(
+        SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure),
+        TIMESTAMP(p.arrival),
+        DAY
+      )
+    ) <= 0.33
   GROUP BY
     p.agency_id
 )
