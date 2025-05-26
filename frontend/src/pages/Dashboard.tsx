@@ -95,7 +95,7 @@ const Dashboard: React.FC = () => {
               total_started: item.total_started || 0
             }))
             .sort((a: AgencyConversionData, b: AgencyConversionData) => 
-              b.start_rate - a.start_rate
+              a.start_rate - b.start_rate // Niedrigere start_rate = höhere Abbruchrate, also umgekehrt sortieren
             );
           
           setConversionData(sortedConversionData);
@@ -123,7 +123,7 @@ const Dashboard: React.FC = () => {
               total_completed: item.total_completed || 0
             }))
             .sort((a: AgencyCompletionData, b: AgencyCompletionData) => 
-              b.completion_rate - a.completion_rate
+              a.early_termination_rate - b.early_termination_rate // Niedrigste Abbruchrate zuerst
             );
           
           setCompletionData(sortedCompletionData);
@@ -155,27 +155,27 @@ const Dashboard: React.FC = () => {
     return 'text-green-700 dark:text-green-300';
   };
 
-  const getConversionColor = (rate: number): string => {
-    if (rate >= 85) return 'bg-green-500';
-    if (rate >= 70) return 'bg-yellow-500';
+  const getConversionColor = (cancellationRate: number): string => {
+    if (cancellationRate <= 15) return 'bg-green-500';
+    if (cancellationRate <= 30) return 'bg-yellow-500';
     return 'bg-red-500';
   };
 
-  const getConversionTextColor = (rate: number): string => {
-    if (rate >= 85) return 'text-green-700 dark:text-green-300';
-    if (rate >= 70) return 'text-yellow-700 dark:text-yellow-300';
+  const getConversionTextColor = (cancellationRate: number): string => {
+    if (cancellationRate <= 15) return 'text-green-700 dark:text-green-300';
+    if (cancellationRate <= 30) return 'text-yellow-700 dark:text-yellow-300';
     return 'text-red-700 dark:text-red-300';
   };
 
-  const getCompletionColor = (rate: number): string => {
-    if (rate >= 80) return 'bg-green-500';
-    if (rate >= 65) return 'bg-yellow-500';
+  const getCompletionColor = (earlyTerminationRate: number): string => {
+    if (earlyTerminationRate <= 20) return 'bg-green-500';
+    if (earlyTerminationRate <= 35) return 'bg-yellow-500';
     return 'bg-red-500';
   };
 
-  const getCompletionTextColor = (rate: number): string => {
-    if (rate >= 80) return 'text-green-700 dark:text-green-300';
-    if (rate >= 65) return 'text-yellow-700 dark:text-yellow-300';
+  const getCompletionTextColor = (earlyTerminationRate: number): string => {
+    if (earlyTerminationRate <= 20) return 'text-green-700 dark:text-green-300';
+    if (earlyTerminationRate <= 35) return 'text-yellow-700 dark:text-yellow-300';
     return 'text-red-700 dark:text-red-300';
   };
 
@@ -345,13 +345,13 @@ const Dashboard: React.FC = () => {
           <div className="flex justify-between items-center mb-4">
             <div>
               <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center">
-                ⚖️ Antrittserfolg
+                ⚠️ Probleme vor der Anreise
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   (Priorität: 8)
                 </span>
               </h2>
               <p className="text-gray-600 dark:text-gray-300 text-sm">
-                Bestätigt → Angetreten (beste Antrittserfolg)
+                Abbrüche zwischen Bestätigung und Anreise
               </p>
             </div>
             <button
@@ -378,22 +378,22 @@ const Dashboard: React.FC = () => {
                     <span className="text-lg font-bold text-gray-400 w-6">
                       #{index + 1}
                     </span>
-                    <div className={`w-2 h-2 rounded-full ${getConversionColor(agency.start_rate)}`}></div>
+                    <div className={`w-2 h-2 rounded-full ${getConversionColor(100 - agency.start_rate)}`}></div>
                     <div>
                       <h3 className="font-medium text-gray-800 dark:text-white text-sm">
                         {agency.agency_name}
                       </h3>
                       <p className="text-xs text-gray-600 dark:text-gray-300">
-                        {agency.total_confirmed} Bestätigte, {agency.total_started} Angetreten
+                        {agency.total_confirmed} Bestätigte, {agency.total_confirmed - agency.total_started} Abgebrochen
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className={`text-lg font-bold ${getConversionTextColor(agency.start_rate)}`}>
-                      {agency.start_rate.toFixed(1)}%
+                    <div className={`text-lg font-bold ${getConversionTextColor(100 - agency.start_rate)}`}>
+                      {(100 - agency.start_rate).toFixed(1)}%
                     </div>
                     <div className="text-xs text-gray-500">
-                      Erfolgreich Angetreten
+                      Abbruch vor Anreise
                     </div>
                   </div>
                 </div>
@@ -413,13 +413,13 @@ const Dashboard: React.FC = () => {
           <div className="flex justify-between items-center mb-4">
             <div>
               <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center">
-                📊 Durchführungsrate
+                ⛔ Probleme nach der Anreise
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   (Priorität: 7)
                 </span>
               </h2>
               <p className="text-gray-600 dark:text-gray-300 text-sm">
-                Angetreten → Durchgezogen (beste Durchführungsrate)
+                Vorzeitige Beendigungen nach Anreise
               </p>
             </div>
             <button
@@ -446,22 +446,22 @@ const Dashboard: React.FC = () => {
                     <span className="text-lg font-bold text-gray-400 w-6">
                       #{index + 1}
                     </span>
-                    <div className={`w-2 h-2 rounded-full ${getCompletionColor(agency.completion_rate)}`}></div>
+                    <div className={`w-2 h-2 rounded-full ${getCompletionColor(agency.early_termination_rate)}`}></div>
                     <div>
                       <h3 className="font-medium text-gray-800 dark:text-white text-sm">
                         {agency.agency_name}
                       </h3>
                       <p className="text-xs text-gray-600 dark:text-gray-300">
-                        {agency.total_started} Angetreten, {agency.total_completed} Durchgezogen
+                        {agency.total_started} Angetreten, {agency.total_started - agency.total_completed} Vorzeitig beendet
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className={`text-lg font-bold ${getCompletionTextColor(agency.completion_rate)}`}>
-                      {agency.completion_rate.toFixed(1)}%
+                    <div className={`text-lg font-bold ${getCompletionTextColor(agency.early_termination_rate)}`}>
+                      {agency.early_termination_rate.toFixed(1)}%
                     </div>
                     <div className="text-xs text-gray-500">
-                      Durchführungsrate
+                      Vorzeitig beendet
                     </div>
                   </div>
                 </div>
