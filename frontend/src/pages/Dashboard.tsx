@@ -123,7 +123,7 @@ const Dashboard: React.FC = () => {
               total_completed: item.total_completed || 0
             }))
             .sort((a: AgencyCompletionData, b: AgencyCompletionData) => 
-              a.early_termination_rate - b.early_termination_rate // Niedrigste Abbruchrate zuerst
+              b.early_termination_rate - a.early_termination_rate // Höchste Abbruchrate zuerst
             );
           
           setCompletionData(sortedCompletionData);
@@ -345,7 +345,7 @@ const Dashboard: React.FC = () => {
           <div className="flex justify-between items-center mb-4">
             <div>
               <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center">
-                ⚠️ Probleme vor der Anreise
+                🚌 Probleme vor der Anreise
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   (Priorität: 8)
                 </span>
@@ -413,7 +413,7 @@ const Dashboard: React.FC = () => {
           <div className="flex justify-between items-center mb-4">
             <div>
               <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center">
-                ⛔ Probleme nach der Anreise
+                🏠 Probleme nach der Anreise
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   (Priorität: 7)
                 </span>
