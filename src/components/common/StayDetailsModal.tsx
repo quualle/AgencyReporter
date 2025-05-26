@@ -183,7 +183,7 @@ const StayDetailsModal: React.FC<StayDetailsModalProps> = ({
                     <div className="px-4 py-3 space-y-3 border-t border-gray-200 dark:border-gray-700">
                       {getStaysFromGroup(group).map((stay: StayDetail, index: number) => (
                         <div
-                          key={stay.care_stay_id}
+                          key={`${stay.care_stay_id}-${index}-${stay.customer_name}`}
                           className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm"
                         >
                           <div className="flex justify-between items-start">
