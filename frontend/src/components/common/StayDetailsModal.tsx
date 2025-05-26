@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '../../services/api';
+import axios from 'axios';
 import Loading from './Loading';
 
 interface StayDetail {
@@ -65,22 +65,25 @@ const StayDetailsModal: React.FC<StayDetailsModalProps> = ({
     setIsLoading(true);
     setError(null);
     try {
-      let response;
+      let endpoint = '';
       switch (detailType) {
         case 'problematic':
-          response = await apiService.getProblematicStaysDetails(agencyId, timePeriod);
+          endpoint = `/api/problematic_stays/details/${agencyId}?time_period=${timePeriod}`;
           break;
         case 'cancellations':
-          response = await apiService.getCancellationsBeforeArrivalDetails(agencyId, timePeriod);
+          endpoint = `/api/quotas/${agencyId}/cancellations-before-arrival/details?time_period=${timePeriod}`;
           break;
         case 'terminations':
-          response = await apiService.getEarlyTerminationsDetails(agencyId, timePeriod);
+          endpoint = `/api/quotas/${agencyId}/early-terminations/details?time_period=${timePeriod}`;
           break;
       }
-      setData(response);
+      
+      const response = await axios.get(endpoint);
+      setData(response.data);
+      
       // Auto-expand first month
-      if (response?.grouped_by_month?.length > 0) {
-        setExpandedMonths(new Set([response.grouped_by_month[0].month]));
+      if (response.data?.grouped_by_month?.length > 0) {
+        setExpandedMonths(new Set([response.data.grouped_by_month[0].month]));
       }
     } catch (err) {
       setError('Fehler beim Laden der Details');
