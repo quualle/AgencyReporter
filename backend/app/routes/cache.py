@@ -5,6 +5,7 @@ Provides API endpoints for cache operations, freshness checking, and preload man
 
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 from typing import Dict, Any, List, Optional
 import logging
 import httpx
@@ -50,11 +51,64 @@ async def cache_health():
 @router.get("/stats")
 async def get_cache_stats():
     """
-    Get comprehensive cache statistics.
+    Get comprehensive cache statistics with categorization.
     """
     try:
         cache_service = get_cache_service()
         stats = await cache_service.get_cache_stats()
+        
+        # Erweitere die Statistiken um kategorisierte Daten
+        db_manager = cache_service.db_manager
+        async with db_manager.get_session() as session:
+            # Dashboard-spezifische Einträge (all-agencies endpoints)
+            dashboard_query = text("""SELECT COUNT(*) as count, 
+                               SUM(CASE WHEN expires_at > datetime('now') THEN 1 ELSE 0 END) as fresh,
+                               SUM(CASE WHEN expires_at <= datetime('now') THEN 1 ELSE 0 END) as stale
+                               FROM cached_data 
+                               WHERE endpoint LIKE '%all-agencies%' 
+                               OR endpoint LIKE '%/overview%'""")
+            dashboard_result = await session.execute(dashboard_query)
+            dashboard_stats = dashboard_result.fetchone()
+            
+            # Agentur-spezifische Einträge
+            agency_query = text("""SELECT COUNT(*) as count,
+                            SUM(CASE WHEN expires_at > datetime('now') THEN 1 ELSE 0 END) as fresh,
+                            SUM(CASE WHEN expires_at <= datetime('now') THEN 1 ELSE 0 END) as stale
+                            FROM cached_data 
+                            WHERE agency_id IS NOT NULL
+                            AND endpoint NOT LIKE '%all-agencies%'
+                            AND endpoint NOT LIKE '%/overview%'""")
+            agency_result = await session.execute(agency_query)
+            agency_stats = agency_result.fetchone()
+            
+            # Allgemeine/Overall Einträge
+            overall_query = text("""SELECT COUNT(*) as count,
+                             SUM(CASE WHEN expires_at > datetime('now') THEN 1 ELSE 0 END) as fresh,
+                             SUM(CASE WHEN expires_at <= datetime('now') THEN 1 ELSE 0 END) as stale
+                             FROM cached_data 
+                             WHERE endpoint LIKE '%/stats/overall%'""")
+            overall_result = await session.execute(overall_query)
+            overall_stats = overall_result.fetchone()
+            
+            # Füge die kategorisierten Stats hinzu
+            stats['category_stats'] = {
+                'dashboard': {
+                    'entries': dashboard_stats['count'] or 0,
+                    'fresh': dashboard_stats['fresh'] or 0,
+                    'stale': dashboard_stats['stale'] or 0
+                },
+                'agency_specific': {
+                    'entries': agency_stats['count'] or 0,
+                    'fresh': agency_stats['fresh'] or 0,
+                    'stale': agency_stats['stale'] or 0
+                },
+                'overall': {
+                    'entries': overall_stats['count'] or 0,
+                    'fresh': overall_stats['fresh'] or 0,
+                    'stale': overall_stats['stale'] or 0
+                }
+            }
+        
         return stats
         
     except Exception as e:
