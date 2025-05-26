@@ -43,6 +43,7 @@ const Dashboard: React.FC = () => {
   const [showAllConversion, setShowAllConversion] = useState<boolean>(false);
   const [showAllCompletion, setShowAllCompletion] = useState<boolean>(false);
   const [isPreloading, setIsPreloading] = useState<boolean>(false);
+  const [minStaysFilter, setMinStaysFilter] = useState<number>(0);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -187,9 +188,15 @@ const Dashboard: React.FC = () => {
     return <ErrorMessage message={error} retry={() => setIsLoading(true)} />;
   }
 
-  const displayProblematicData = showAllProblematic ? problematicData : problematicData.slice(0, 5);
-  const displayConversionData = showAllConversion ? conversionData : conversionData.slice(0, 5);
-  const displayCompletionData = showAllCompletion ? completionData : completionData.slice(0, 5);
+  // Filter data based on minimum stays
+  const filteredProblematicData = problematicData.filter(agency => agency.total_stays >= minStaysFilter);
+  const filteredConversionData = conversionData.filter(agency => agency.total_confirmed >= minStaysFilter);
+  const filteredCompletionData = completionData.filter(agency => agency.total_started >= minStaysFilter);
+
+  // Display data based on show all toggle
+  const displayProblematicData = showAllProblematic ? filteredProblematicData : filteredProblematicData.slice(0, 5);
+  const displayConversionData = showAllConversion ? filteredConversionData : filteredConversionData.slice(0, 5);
+  const displayCompletionData = showAllCompletion ? filteredCompletionData : filteredCompletionData.slice(0, 5);
 
   return (
     <div className="dashboard">
@@ -272,6 +279,34 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Filter Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <div className="flex items-center justify-center space-x-4">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Nur Agenturen mit mindestens
+          </label>
+          <input
+            type="number"
+            min="0"
+            max="300"
+            value={minStaysFilter}
+            onChange={(e) => setMinStaysFilter(Math.max(0, Math.min(300, parseInt(e.target.value) || 0)))}
+            className="w-20 px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+          />
+          <span className="text-sm text-gray-700 dark:text-gray-300">
+            Einsätzen
+          </span>
+          {minStaysFilter > 0 && (
+            <button
+              onClick={() => setMinStaysFilter(0)}
+              className="ml-4 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              Filter zurücksetzen
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Top Section: 3 Widgets nebeneinander */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         
@@ -298,9 +333,11 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
 
-          {problematicData.length === 0 ? (
+          {filteredProblematicData.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              Keine Daten verfügbar
+              {minStaysFilter > 0 
+                ? `Keine Agenturen mit mindestens ${minStaysFilter} Einsätzen gefunden`
+                : 'Keine Daten verfügbar'}
             </div>
           ) : (
             <div className="space-y-2">
@@ -333,9 +370,9 @@ const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {showAllProblematic && problematicData.length > 5 && (
+          {showAllProblematic && filteredProblematicData.length > 5 && (
             <div className="mt-3 text-center text-xs text-gray-500">
-              Zeige alle {problematicData.length} Agenturen
+              Zeige alle {filteredProblematicData.length} Agenturen
             </div>
           )}
         </div>
@@ -363,9 +400,11 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
 
-          {conversionData.length === 0 ? (
+          {filteredConversionData.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              Keine Conversion-Daten verfügbar
+              {minStaysFilter > 0 
+                ? `Keine Agenturen mit mindestens ${minStaysFilter} bestätigten Einsätzen gefunden`
+                : 'Keine Conversion-Daten verfügbar'}
             </div>
           ) : (
             <div className="space-y-2">
@@ -401,9 +440,9 @@ const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {showAllConversion && conversionData.length > 5 && (
+          {showAllConversion && filteredConversionData.length > 5 && (
             <div className="mt-3 text-center text-xs text-gray-500">
-              Zeige alle {conversionData.length} Agenturen
+              Zeige alle {filteredConversionData.length} Agenturen
             </div>
           )}
         </div>
@@ -431,9 +470,11 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
 
-          {completionData.length === 0 ? (
+          {filteredCompletionData.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              Keine Durchführungs-Daten verfügbar
+              {minStaysFilter > 0 
+                ? `Keine Agenturen mit mindestens ${minStaysFilter} angetretenen Einsätzen gefunden`
+                : 'Keine Durchführungs-Daten verfügbar'}
             </div>
           ) : (
             <div className="space-y-2">
@@ -469,9 +510,9 @@ const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {showAllCompletion && completionData.length > 5 && (
+          {showAllCompletion && filteredCompletionData.length > 5 && (
             <div className="mt-3 text-center text-xs text-gray-500">
-              Zeige alle {completionData.length} Agenturen
+              Zeige alle {filteredCompletionData.length} Agenturen
             </div>
           )}
         </div>
