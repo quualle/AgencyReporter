@@ -425,6 +425,363 @@ async def get_all_agencies_conversion_stats(
         raise HTTPException(status_code=500, detail=f"Failed to fetch all agencies conversion stats: {str(e)}")
 
 
+@router.get("/{agency_id}/cancellations-before-arrival/details")
+async def get_cancellations_before_arrival_details(
+    agency_id: str,
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Get detailed list of individual cancellations before arrival for an agency.
+    Returns individual care stay records that were cancelled before arrival.
+    """
+    try:
+        # Check cache first
+        cache_service = get_cache_service()
+        endpoint = f"/quotas/{agency_id}/cancellations-before-arrival/details"
+        cache_key = cache_service.create_cache_key(endpoint, {"time_period": time_period})
+        cached_data = await cache_service.get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data.get("data", cached_data)
+        
+        query_manager = QueryManager()
+        
+        # Build the query
+        query = """
+        WITH cancellation_details AS (
+            SELECT
+                cs._id as care_stay_id,
+                cs.created_at,
+                cs.arrival as planned_arrival,
+                cs.cancelled_at,
+                cs.cancellation_reason,
+                p.name as customer_name,
+                p.city as customer_city,
+                c.agency_id,
+                a.name as agency_name,
+                DATE_DIFF(DATE(cs.arrival), DATE(cs.cancelled_at), DAY) as days_before_arrival
+            FROM
+                `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+            JOIN
+                `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+            JOIN
+                `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+            JOIN
+                `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.postings` p ON c.posting_id = p._id
+            WHERE
+                c.agency_id = @agency_id
+                AND cs.created_at BETWEEN @start_date AND @end_date
+                AND cs.stage = 'Abgebrochen'
+                AND cs.cancelled_at IS NOT NULL
+                AND cs.arrival IS NOT NULL
+                AND DATE(cs.cancelled_at) < DATE(cs.arrival)
+                -- Confirmed before cancellation
+                AND EXISTS (
+                    SELECT 1
+                    FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+                    WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+                )
+        )
+        SELECT * FROM cancellation_details
+        ORDER BY cancelled_at DESC
+        """
+        
+        # Calculate date range
+        start_date, end_date = query_manager._calculate_date_range(time_period)
+        
+        # Execute query
+        from ..utils.bigquery_connection import BigQueryConnection
+        connection = BigQueryConnection()
+        results = connection.execute_query(query, {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        })
+        
+        # Format results
+        details = []
+        agency_name = "Unknown"
+        
+        for row in results:
+            if not agency_name or agency_name == "Unknown":
+                agency_name = row.get("agency_name", "Unknown")
+                
+            detail = {
+                "care_stay_id": row.get("care_stay_id"),
+                "customer_name": row.get("customer_name"),
+                "customer_city": row.get("customer_city"),
+                "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
+                "planned_arrival": row.get("planned_arrival").isoformat() if row.get("planned_arrival") else None,
+                "cancelled_at": row.get("cancelled_at").isoformat() if row.get("cancelled_at") else None,
+                "cancellation_reason": row.get("cancellation_reason"),
+                "days_before_arrival": row.get("days_before_arrival")
+            }
+            details.append(detail)
+        
+        # Group by month
+        from collections import defaultdict
+        grouped_by_month = defaultdict(list)
+        
+        for detail in details:
+            if detail["cancelled_at"]:
+                month_key = detail["cancelled_at"][:7]  # YYYY-MM
+                grouped_by_month[month_key].append(detail)
+        
+        # Convert to sorted list
+        grouped_data = []
+        for month in sorted(grouped_by_month.keys(), reverse=True):
+            grouped_data.append({
+                "month": month,
+                "count": len(grouped_by_month[month]),
+                "cancellations": grouped_by_month[month]
+            })
+        
+        result = {
+            "agency_id": agency_id,
+            "agency_name": agency_name,
+            "time_period": time_period,
+            "total_count": len(details),
+            "grouped_by_month": grouped_data
+        }
+        
+        # Cache the result
+        await cache_service.save_cached_data(
+            cache_key=cache_key,
+            data={"data": result},
+            endpoint=endpoint,
+            agency_id=agency_id,
+            time_period=time_period,
+            expires_hours=24
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch cancellation details: {str(e)}")
+
+
+@router.get("/{agency_id}/early-terminations/details")
+async def get_early_terminations_details(
+    agency_id: str,
+    time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Get detailed list of individual early terminations after arrival for an agency.
+    Returns individual care stay records that were terminated early (based on 33% rule).
+    """
+    try:
+        # Check cache first
+        cache_service = get_cache_service()
+        endpoint = f"/quotas/{agency_id}/early-terminations/details"
+        cache_key = cache_service.create_cache_key(endpoint, {"time_period": time_period})
+        cached_data = await cache_service.get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data.get("data", cached_data)
+        
+        query_manager = QueryManager()
+        
+        # Build the query - reusing logic from GET_ALL_AGENCIES_COMPLETION_STATS
+        query = """
+        WITH early_termination_details AS (
+            WITH parsed AS (
+                SELECT
+                    cs._id as care_stay_id,
+                    cs.arrival,
+                    cs.departure,
+                    cs.created_at,
+                    cs.stage,
+                    cs.end_reason,
+                    c.agency_id,
+                    a.name as agency_name,
+                    p.name as customer_name,
+                    p.city as customer_city,
+                    JSON_EXTRACT_ARRAY(cs.tracks) AS track_array,
+                    -- Calculate actual stay duration
+                    DATE_DIFF(DATE(cs.departure), DATE(cs.arrival), DAY) as actual_duration_days
+                FROM
+                    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+                JOIN
+                    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+                JOIN
+                    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+                JOIN
+                    `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.postings` p ON c.posting_id = p._id
+                WHERE
+                    c.agency_id = @agency_id
+                    AND cs.created_at BETWEEN @start_date AND @end_date
+                    AND cs.arrival IS NOT NULL
+                    AND cs.arrival != ''
+                    -- Must have reached "Bestätigt" status (started)
+                    AND EXISTS (
+                        SELECT 1
+                        FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+                        WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+                    )
+                    -- Not cancelled before arrival
+                    AND NOT (
+                        cs.stage = 'Abgebrochen' AND 
+                        EXISTS (
+                            SELECT 1
+                            FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+                            WHERE 
+                                JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Abgebrochen'
+                                AND TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at')) < TIMESTAMP(cs.arrival)
+                        )
+                    )
+                    -- Must have a departure date
+                    AND cs.departure IS NOT NULL
+                    AND cs.departure != ''
+                    -- Departure must be in the past
+                    AND TIMESTAMP(cs.departure) < CURRENT_TIMESTAMP()
+            ),
+            departure_changes AS (
+                -- Extract departure changes to determine if early termination
+                SELECT
+                    p.care_stay_id,
+                    p.agency_id,
+                    p.customer_name,
+                    p.customer_city,
+                    p.arrival,
+                    p.departure,
+                    p.actual_duration_days,
+                    p.end_reason,
+                    -- Get the first departure change (original planned departure)
+                    ARRAY_AGG(
+                        STRUCT(
+                            JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[0]') AS original_departure,
+                            JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[1]') AS new_departure,
+                            JSON_EXTRACT_SCALAR(track_item, '$.created_at') AS change_timestamp
+                        )
+                        ORDER BY JSON_EXTRACT_SCALAR(track_item, '$.created_at') ASC
+                    )[OFFSET(0)] AS first_change
+                FROM
+                    parsed p,
+                    UNNEST(p.track_array) AS track_item
+                WHERE
+                    JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[0]') IS NOT NULL
+                    AND SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[0]')) IS NOT NULL
+                    AND SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', JSON_EXTRACT_SCALAR(track_item, '$.differences.departure[1]')) IS NOT NULL
+                GROUP BY
+                    p.care_stay_id, p.agency_id, p.customer_name, p.customer_city, 
+                    p.arrival, p.departure, p.actual_duration_days, p.end_reason
+            )
+            SELECT
+                dc.*,
+                -- Calculate planned duration and reduction percentage
+                DATE_DIFF(
+                    DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure)),
+                    DATE(dc.arrival),
+                    DAY
+                ) as planned_duration_days,
+                SAFE_DIVIDE(
+                    DATE_DIFF(
+                        DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure)),
+                        DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.new_departure)),
+                        DAY
+                    ),
+                    DATE_DIFF(
+                        DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure)),
+                        DATE(dc.arrival),
+                        DAY
+                    )
+                ) as reduction_percentage
+            FROM departure_changes dc
+            WHERE
+                -- Was shortened (not extended)
+                SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.new_departure) < 
+                SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure)
+                -- And shortened by more than 33%
+                AND SAFE_DIVIDE(
+                    DATE_DIFF(
+                        DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure)),
+                        DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.new_departure)),
+                        DAY
+                    ),
+                    DATE_DIFF(
+                        DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*SZ', dc.first_change.original_departure)),
+                        DATE(dc.arrival),
+                        DAY
+                    )
+                ) > 0.33
+        )
+        SELECT * FROM early_termination_details
+        ORDER BY departure DESC
+        """
+        
+        # Calculate date range
+        start_date, end_date = query_manager._calculate_date_range(time_period)
+        
+        # Execute query
+        from ..utils.bigquery_connection import BigQueryConnection
+        connection = BigQueryConnection()
+        results = connection.execute_query(query, {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        })
+        
+        # Format results
+        details = []
+        agency_name = "Unknown"
+        
+        for row in results:
+            if not agency_name or agency_name == "Unknown":
+                agency_name = row.get("agency_name", "Unknown")
+                
+            detail = {
+                "care_stay_id": row.get("care_stay_id"),
+                "customer_name": row.get("customer_name"),
+                "customer_city": row.get("customer_city"),
+                "arrival": row.get("arrival").isoformat() if row.get("arrival") else None,
+                "departure": row.get("departure").isoformat() if row.get("departure") else None,
+                "actual_duration_days": row.get("actual_duration_days"),
+                "planned_duration_days": row.get("planned_duration_days"),
+                "reduction_percentage": round(row.get("reduction_percentage", 0) * 100, 1) if row.get("reduction_percentage") else 0,
+                "end_reason": row.get("end_reason")
+            }
+            details.append(detail)
+        
+        # Group by month (based on departure date)
+        from collections import defaultdict
+        grouped_by_month = defaultdict(list)
+        
+        for detail in details:
+            if detail["departure"]:
+                month_key = detail["departure"][:7]  # YYYY-MM
+                grouped_by_month[month_key].append(detail)
+        
+        # Convert to sorted list
+        grouped_data = []
+        for month in sorted(grouped_by_month.keys(), reverse=True):
+            grouped_data.append({
+                "month": month,
+                "count": len(grouped_by_month[month]),
+                "terminations": grouped_by_month[month]
+            })
+        
+        result = {
+            "agency_id": agency_id,
+            "agency_name": agency_name,
+            "time_period": time_period,
+            "total_count": len(details),
+            "grouped_by_month": grouped_data
+        }
+        
+        # Cache the result
+        await cache_service.save_cached_data(
+            cache_key=cache_key,
+            data={"data": result},
+            endpoint=endpoint,
+            agency_id=agency_id,
+            time_period=time_period,
+            expires_hours=24
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch early termination details: {str(e)}")
+
+
 # Include other routers if necessary
 # from . import other_router
 # router.include_router(other_router.router)

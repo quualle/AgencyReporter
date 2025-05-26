@@ -1118,6 +1118,39 @@ export const preloadService = {
       if (onProgressUpdate) onProgressUpdate({...progress});
       return false;
     }
+  },
+  
+  // Detail endpoints for dashboard widgets
+  getProblematicStaysDetails: async (
+    agencyId: string,
+    timePeriod: string = 'last_quarter',
+    eventType?: string
+  ): Promise<any> => {
+    const params: any = { time_period: timePeriod };
+    if (eventType) params.event_type = eventType;
+    
+    const response = await api.get(`/problematic_stays/details/${agencyId}`, { params });
+    return response.data;
+  },
+  
+  getCancellationsBeforeArrivalDetails: async (
+    agencyId: string,
+    timePeriod: string = 'last_quarter'
+  ): Promise<any> => {
+    const response = await api.get(`/quotas/${agencyId}/cancellations-before-arrival/details`, { 
+      params: { time_period: timePeriod }
+    });
+    return response.data;
+  },
+  
+  getEarlyTerminationsDetails: async (
+    agencyId: string,
+    timePeriod: string = 'last_quarter'
+  ): Promise<any> => {
+    const response = await api.get(`/quotas/${agencyId}/early-terminations/details`, { 
+      params: { time_period: timePeriod }
+    });
+    return response.data;
   }
 };
 

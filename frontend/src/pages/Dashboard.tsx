@@ -4,6 +4,7 @@ import { apiService, preloadService } from '../services/api';
 import Loading from '../components/common/Loading';
 import ErrorMessage from '../components/common/ErrorMessage';
 import CacheStats from '../components/common/CacheStats';
+import StayDetailsModal from '../components/common/StayDetailsModal';
 
 interface AgencyProblematicData {
   agency_id: string;
@@ -44,6 +45,21 @@ const Dashboard: React.FC = () => {
   const [showAllCompletion, setShowAllCompletion] = useState<boolean>(false);
   const [isPreloading, setIsPreloading] = useState<boolean>(false);
   const [minStaysFilter, setMinStaysFilter] = useState<number>(0);
+  
+  // Modal state
+  const [modalData, setModalData] = useState<{
+    isOpen: boolean;
+    agencyId: string;
+    agencyName: string;
+    title: string;
+    detailType: 'problematic' | 'cancellations' | 'terminations';
+  }>({
+    isOpen: false,
+    agencyId: '',
+    agencyName: '',
+    title: '',
+    detailType: 'problematic'
+  });
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -344,7 +360,14 @@ const Dashboard: React.FC = () => {
               {displayProblematicData.map((agency, index) => (
                 <div 
                   key={agency.agency_id}
-                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                  onClick={() => setModalData({
+                    isOpen: true,
+                    agencyId: agency.agency_id,
+                    agencyName: agency.agency_name,
+                    title: 'Problematische Einsätze',
+                    detailType: 'problematic'
+                  })}
                 >
                   <div className="flex items-center space-x-3">
                     <span className="text-lg font-bold text-gray-400 w-6">
@@ -411,7 +434,14 @@ const Dashboard: React.FC = () => {
               {displayConversionData.map((agency, index) => (
                 <div 
                   key={agency.agency_id}
-                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                  onClick={() => setModalData({
+                    isOpen: true,
+                    agencyId: agency.agency_id,
+                    agencyName: agency.agency_name,
+                    title: 'Probleme vor der Anreise',
+                    detailType: 'cancellations'
+                  })}
                 >
                   <div className="flex items-center space-x-3">
                     <span className="text-lg font-bold text-gray-400 w-6">
@@ -481,7 +511,14 @@ const Dashboard: React.FC = () => {
               {displayCompletionData.map((agency, index) => (
                 <div 
                   key={agency.agency_id}
-                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                  onClick={() => setModalData({
+                    isOpen: true,
+                    agencyId: agency.agency_id,
+                    agencyName: agency.agency_name,
+                    title: 'Probleme nach der Anreise',
+                    detailType: 'terminations'
+                  })}
                 >
                   <div className="flex items-center space-x-3">
                     <span className="text-lg font-bold text-gray-400 w-6">
@@ -524,6 +561,17 @@ const Dashboard: React.FC = () => {
         <h3 className="text-lg font-medium mb-2">Weitere Widgets folgen</h3>
         <p>5 weitere Dashboard-Widgets werden schrittweise implementiert</p>
       </div>
+      
+      {/* Details Modal */}
+      <StayDetailsModal
+        isOpen={modalData.isOpen}
+        onClose={() => setModalData({ ...modalData, isOpen: false })}
+        agencyId={modalData.agencyId}
+        agencyName={modalData.agencyName}
+        title={modalData.title}
+        detailType={modalData.detailType}
+        timePeriod={timePeriod}
+      />
     </div>
   );
 };

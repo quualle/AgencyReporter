@@ -785,4 +785,186 @@ async def get_problematic_stays_cancellation_lead_time(
             "count": len(demo_data)
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch cancellation lead time data: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to fetch cancellation lead time data: {str(e)}")
+
+
+@router.get("/details/{agency_id}")
+async def get_problematic_stays_details(
+    agency_id: str,
+    time_period: str = Query("last_quarter", description="Time period filter"),
+    event_type: Optional[str] = Query(None, description="Filter by event type (early_end, instant_departure, before_3_days)")
+):
+    """
+    Get detailed list of individual problematic stays for an agency.
+    Returns individual care stay records with customer info, dates, and reasons.
+    """
+    try:
+        # Check cache first
+        cache_service = get_cache_service()
+        endpoint = f"/problematic_stays/details/{agency_id}"
+        params = {"time_period": time_period}
+        if event_type:
+            params["event_type"] = event_type
+            
+        cache_key = cache_service.create_cache_key(endpoint, params)
+        cached_data = await cache_service.get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data.get("data", cached_data)
+        
+        # Calculate date range
+        today = datetime.today()
+        if time_period == "last_month":
+            start_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+        elif time_period == "last_quarter":
+            start_date = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+        elif time_period == "last_year":
+            start_date = (today - timedelta(days=365)).strftime("%Y-%m-%d")
+        else:  # all_time
+            start_date = "2020-01-01"
+            
+        end_date = today.strftime("%Y-%m-%d")
+        
+        # Build query based on event type
+        base_query = """
+        WITH problematic_details AS (
+            SELECT
+                cs._id as care_stay_id,
+                cs.created_at,
+                cs.arrival,
+                cs.departure,
+                cs.stage,
+                cs.cancelled_at,
+                cs.cancellation_reason,
+                cs.ended_at,
+                cs.end_reason,
+                p.name as customer_name,
+                p.city as customer_city,
+                c.agency_id,
+                a.name as agency_name,
+                -- Determine problematic type
+                CASE
+                    WHEN cs.stage = 'Abgebrochen' 
+                         AND cs.cancelled_at IS NOT NULL 
+                         AND cs.arrival IS NOT NULL 
+                         AND DATE(cs.cancelled_at) < DATE(cs.arrival) THEN 'Abbruch vor Anreise'
+                    WHEN cs.ended_at IS NOT NULL 
+                         AND cs.arrival IS NOT NULL 
+                         AND cs.departure IS NOT NULL
+                         AND DATE_DIFF(DATE(cs.departure), DATE(cs.arrival), DAY) <= 3 THEN 'Sofortabreise (≤3 Tage)'
+                    WHEN cs.ended_at IS NOT NULL 
+                         AND cs.arrival IS NOT NULL 
+                         AND cs.departure IS NOT NULL
+                         AND cs.ended_at < cs.departure THEN 'Vorzeitige Beendigung'
+                    ELSE 'Andere'
+                END as problem_type,
+                -- Calculate duration if applicable
+                CASE
+                    WHEN cs.arrival IS NOT NULL AND cs.departure IS NOT NULL
+                    THEN DATE_DIFF(DATE(cs.departure), DATE(cs.arrival), DAY)
+                    ELSE NULL
+                END as stay_duration_days
+            FROM
+                `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
+            JOIN
+                `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.contracts` c ON cs.contract_id = c._id
+            JOIN
+                `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.agencies` a ON c.agency_id = a._id
+            JOIN
+                `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.postings` p ON c.posting_id = p._id
+            WHERE
+                c.agency_id = @agency_id
+                AND cs.created_at BETWEEN @start_date AND @end_date
+                AND (
+                    -- Include based on problem type
+                    (cs.stage = 'Abgebrochen' AND cs.cancelled_at IS NOT NULL AND cs.arrival IS NOT NULL AND DATE(cs.cancelled_at) < DATE(cs.arrival))
+                    OR (cs.ended_at IS NOT NULL AND cs.arrival IS NOT NULL AND cs.departure IS NOT NULL AND DATE_DIFF(DATE(cs.departure), DATE(cs.arrival), DAY) <= 3)
+                    OR (cs.ended_at IS NOT NULL AND cs.arrival IS NOT NULL AND cs.departure IS NOT NULL AND cs.ended_at < cs.departure)
+                )
+        )
+        SELECT * FROM problematic_details
+        """
+        
+        # Add event type filter if specified
+        if event_type:
+            if event_type == "before_3_days":
+                base_query += " WHERE problem_type = 'Sofortabreise (≤3 Tage)'"
+            elif event_type == "early_end":
+                base_query += " WHERE problem_type = 'Vorzeitige Beendigung'"
+            elif event_type == "instant_departure":
+                base_query += " WHERE problem_type = 'Abbruch vor Anreise'"
+                
+        base_query += " ORDER BY created_at DESC"
+        
+        # Execute query
+        connection = BigQueryConnection()
+        query_params = {
+            "agency_id": agency_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        
+        results = connection.execute_query(base_query, query_params)
+        
+        # Format results
+        details = []
+        for row in results:
+            detail = {
+                "care_stay_id": row.get("care_stay_id"),
+                "customer_name": row.get("customer_name"),
+                "customer_city": row.get("customer_city"),
+                "problem_type": row.get("problem_type"),
+                "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
+                "arrival": row.get("arrival").isoformat() if row.get("arrival") else None,
+                "departure": row.get("departure").isoformat() if row.get("departure") else None,
+                "cancelled_at": row.get("cancelled_at").isoformat() if row.get("cancelled_at") else None,
+                "ended_at": row.get("ended_at").isoformat() if row.get("ended_at") else None,
+                "cancellation_reason": row.get("cancellation_reason"),
+                "end_reason": row.get("end_reason"),
+                "stay_duration_days": row.get("stay_duration_days"),
+                "stage": row.get("stage")
+            }
+            details.append(detail)
+        
+        # Group by month for better organization
+        from collections import defaultdict
+        grouped_by_month = defaultdict(list)
+        
+        for detail in details:
+            # Extract month from created_at
+            if detail["created_at"]:
+                month_key = detail["created_at"][:7]  # YYYY-MM
+                grouped_by_month[month_key].append(detail)
+        
+        # Convert to sorted list
+        grouped_data = []
+        for month in sorted(grouped_by_month.keys(), reverse=True):
+            grouped_data.append({
+                "month": month,
+                "count": len(grouped_by_month[month]),
+                "stays": grouped_by_month[month]
+            })
+        
+        result = {
+            "agency_id": agency_id,
+            "agency_name": results[0].get("agency_name") if results else "Unknown",
+            "time_period": time_period,
+            "event_type": event_type,
+            "total_count": len(details),
+            "grouped_by_month": grouped_data
+        }
+        
+        # Cache the result
+        await cache_service.save_cached_data(
+            cache_key=cache_key,
+            data={"data": result},
+            endpoint=endpoint,
+            agency_id=agency_id,
+            time_period=time_period,
+            expires_hours=24
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error fetching problematic stays details: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}") 
