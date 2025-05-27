@@ -1007,6 +1007,7 @@ async def get_dashboard_overview(
                 "cancelled_before_arrival_count": int(row.get("cancelled_before_arrival_count", 0)),
                 "shortened_after_arrival_count": int(row.get("shortened_after_arrival_count", 0)),
                 "total_problematic_count": int(row.get("total_problematic_count", 0)),
+                "total_started_stays": int(row.get("total_started_stays", 0)),
                 "problematic_percentage": float(row.get("problematic_percentage", 0)),
                 "cancellation_percentage": float(row.get("cancellation_percentage", 0)),
                 "early_termination_percentage": float(row.get("early_termination_percentage", 0))

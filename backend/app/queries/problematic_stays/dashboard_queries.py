@@ -53,6 +53,9 @@ SELECT
   COALESCE(pc.shortened_after_arrival_count, 0) AS shortened_after_arrival_count,
   COALESCE(pc.total_problematic_count, 0) AS total_problematic_count,
   
+  -- Berechne angetretene Care Stays (bestätigt minus vor Anreise abgebrochen)
+  cs.total_confirmed_stays - COALESCE(pc.cancelled_before_arrival_count, 0) AS total_started_stays,
+  
   -- Prozentsätze für Sortierung
   SAFE_DIVIDE(COALESCE(pc.total_problematic_count, 0), cs.total_confirmed_stays) * 100 AS problematic_percentage,
   SAFE_DIVIDE(COALESCE(pc.cancelled_before_arrival_count, 0), cs.total_confirmed_stays) * 100 AS cancellation_percentage,

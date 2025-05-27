@@ -77,9 +77,20 @@ const Dashboard: React.FC = () => {
         console.log(`📊 Fetching dashboard data for period: ${timePeriod}`);
         
         // Schritt 1: Dashboard-spezifische Daten laden
-        const dashboardResponse = await apiService.getDashboardProblematicOverview(timePeriod, false, true);
+        const dashboardResponse = await apiService.getDashboardProblematicOverview(timePeriod, true, false);
         
         console.log('Dashboard overview data:', dashboardResponse);
+        
+        // Debug: Zeige Beispieldaten für die erste Agentur
+        if (dashboardResponse?.data?.[0]) {
+          const firstAgency = dashboardResponse.data[0];
+          console.log(`📊 Beispiel-Agentur: ${firstAgency.agency_name}`);
+          console.log(`   - Bestätigte Care Stays: ${firstAgency.total_confirmed_stays}`);
+          console.log(`   - Angetretene Care Stays: ${firstAgency.total_started_stays}`);
+          console.log(`   - Problematische gesamt: ${firstAgency.total_problematic_count}`);
+          console.log(`   - Abbrüche vor Anreise: ${firstAgency.cancelled_before_arrival_count}`);
+          console.log(`   - Vorzeitige Beendigungen: ${firstAgency.shortened_after_arrival_count}`);
+        }
         
         if (dashboardResponse && dashboardResponse.data && Array.isArray(dashboardResponse.data)) {
           // Verwende die Dashboard-spezifischen Daten für alle drei Widgets
@@ -125,8 +136,8 @@ const Dashboard: React.FC = () => {
               agency_name: item.agency_name,
               completion_rate: 100 - item.early_termination_percentage,
               early_termination_rate: item.early_termination_percentage || 0,
-              total_started: item.total_confirmed_stays || 0,
-              total_completed: item.total_confirmed_stays - item.shortened_after_arrival_count,
+              total_started: item.total_started_stays || 0,  // Verwende die angetretenen Care Stays
+              total_completed: item.total_started_stays - item.shortened_after_arrival_count,
               total_shortened: item.shortened_after_arrival_count || 0
             }))
             .sort((a: AgencyCompletionData, b: AgencyCompletionData) => 
@@ -315,7 +326,7 @@ const Dashboard: React.FC = () => {
                         {agency.agency_name}
                       </h3>
                       <p className="text-xs text-gray-600 dark:text-gray-300">
-                        {agency.total_problematic} von {agency.total_confirmed} bestätigt
+                        {agency.total_problematic} von {agency.total_confirmed} von einem Problem betroffen
                       </p>
                     </div>
                   </div>
@@ -400,7 +411,7 @@ const Dashboard: React.FC = () => {
                         {agency.agency_name}
                       </h3>
                       <p className="text-xs text-gray-600 dark:text-gray-300">
-                        {agency.total_cancelled_before_arrival} von {agency.total_confirmed} bestätigt
+                        {agency.total_cancelled_before_arrival} von {agency.total_confirmed} vor Anreise abgebrochen
                       </p>
                     </div>
                   </div>
@@ -488,7 +499,7 @@ const Dashboard: React.FC = () => {
                         {agency.agency_name}
                       </h3>
                       <p className="text-xs text-gray-600 dark:text-gray-300">
-                        {agency.total_shortened} von {agency.total_started} bestätigt
+                        {agency.total_started} angereist, {agency.total_shortened} vorzeitig beendet
                       </p>
                     </div>
                   </div>
