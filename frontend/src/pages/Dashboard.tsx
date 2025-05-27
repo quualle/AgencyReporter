@@ -11,6 +11,7 @@ interface AgencyProblematicData {
   agency_name: string;
   total_problematic: number;
   total_stays: number;
+  total_confirmed: number;
   problematic_rate: number;
 }
 
@@ -86,6 +87,7 @@ const Dashboard: React.FC = () => {
               agency_name: item.agency_name,
               total_problematic: item.total_problematic || 0,
               total_stays: item.total_carestays || 0, // Korrektes Feld aus SQL
+              total_confirmed: item.total_confirmed || 0, // Neues Feld für bestätigte Einsätze
               problematic_rate: item.problematic_percentage || 0 // Korrektes Feld aus SQL
             }))
             .sort((a: AgencyProblematicData, b: AgencyProblematicData) => 
@@ -213,7 +215,7 @@ const Dashboard: React.FC = () => {
   }
 
   // Filter data based on minimum stays
-  const filteredProblematicData = problematicData.filter(agency => agency.total_stays >= minStaysFilter);
+  const filteredProblematicData = problematicData.filter(agency => agency.total_confirmed >= minStaysFilter);
   const filteredConversionData = conversionData.filter(agency => agency.total_confirmed >= minStaysFilter);
   const filteredCompletionData = completionData.filter(agency => agency.total_started >= minStaysFilter);
 
@@ -249,7 +251,7 @@ const Dashboard: React.FC = () => {
             className="w-20 px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
           />
           <span className="text-sm text-gray-700 dark:text-gray-300">
-            Einsätzen
+            bestätigten Einsätzen
           </span>
           {minStaysFilter > 0 && (
             <button
@@ -302,7 +304,7 @@ const Dashboard: React.FC = () => {
           {filteredProblematicData.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               {minStaysFilter > 0 
-                ? `Keine Agenturen mit mindestens ${minStaysFilter} Einsätzen gefunden`
+                ? `Keine Agenturen mit mindestens ${minStaysFilter} bestätigten Einsätzen gefunden`
                 : 'Keine Daten verfügbar'}
             </div>
           ) : (
@@ -329,7 +331,7 @@ const Dashboard: React.FC = () => {
                         {agency.agency_name}
                       </h3>
                       <p className="text-xs text-gray-600 dark:text-gray-300">
-                        {agency.total_problematic} von {agency.total_stays}
+                        {agency.total_problematic} von {agency.total_confirmed} bestätigt
                       </p>
                     </div>
                   </div>

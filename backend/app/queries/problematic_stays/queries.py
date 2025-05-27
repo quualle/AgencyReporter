@@ -10,7 +10,13 @@ WITH total_carestays AS (
   -- Gesamtanzahl aller Pflegeeinsätze pro Agentur im Zeitraum
   SELECT
     c.agency_id,
-    COUNT(*) AS total_count
+    COUNT(*) AS total_count,
+    -- Nur bestätigte Einsätze zählen
+    COUNTIF(cs.stage = 'Bestätigt' OR EXISTS (
+      SELECT 1
+      FROM UNNEST(JSON_EXTRACT_ARRAY(cs.tracks)) AS track
+      WHERE JSON_EXTRACT_SCALAR(track, '$.differences.stage[1]') = 'Bestätigt'
+    )) AS total_confirmed_count
   FROM
     `gcpxbixpflegehilfesenioren.PflegehilfeSeniore_BI.care_stays` cs
   JOIN
@@ -109,13 +115,14 @@ SELECT
   COALESCE(p.agency_name, 'Unknown Agency') AS agency_name,
   COALESCE(p.total_problematic, 0) AS total_problematic,
   tc.total_count AS total_carestays,
-  SAFE_DIVIDE(COALESCE(p.total_problematic, 0), tc.total_count) * 100 AS problematic_percentage,
+  tc.total_confirmed_count AS total_confirmed,
+  SAFE_DIVIDE(COALESCE(p.total_problematic, 0), tc.total_confirmed_count) * 100 AS problematic_percentage,
   
   -- Event-Typ-Statistiken
   p.cancelled_before_arrival_count,
   p.shortened_after_arrival_count,
-  SAFE_DIVIDE(p.cancelled_before_arrival_count, tc.total_count) * 100 AS cancelled_percentage,
-  SAFE_DIVIDE(p.shortened_after_arrival_count, tc.total_count) * 100 AS shortened_percentage,
+  SAFE_DIVIDE(p.cancelled_before_arrival_count, tc.total_confirmed_count) * 100 AS cancelled_percentage,
+  SAFE_DIVIDE(p.shortened_after_arrival_count, tc.total_confirmed_count) * 100 AS shortened_percentage,
   
   -- Stay-Typ-Statistiken
   p.first_stay_count,
@@ -132,13 +139,13 @@ SELECT
   -- Ersatz-Statistiken
   p.with_replacement_count,
   p.with_follow_up_count,
-  SAFE_DIVIDE(p.with_replacement_count, tc.total_count) * 100 AS replacement_percentage,
+  SAFE_DIVIDE(p.with_replacement_count, tc.total_confirmed_count) * 100 AS replacement_percentage,
   SAFE_DIVIDE(p.with_follow_up_count, p.shortened_after_arrival_count) * 100 AS follow_up_percentage,
   
   -- Sofortige Abreise
   p.instant_departure_count,
   p.avg_instant_departure_days,
-  SAFE_DIVIDE(p.instant_departure_count, tc.total_count) * 100 AS instant_departure_percentage,
+  SAFE_DIVIDE(p.instant_departure_count, tc.total_confirmed_count) * 100 AS instant_departure_percentage,
   
   -- Sofortige Abreise nach Tagen
   p.instant_departure_day_1,
