@@ -185,14 +185,14 @@ const Dashboard: React.FC = () => {
   };
 
   const getCompletionColor = (earlyTerminationRate: number): string => {
-    if (earlyTerminationRate <= 20) return 'bg-green-500';
-    if (earlyTerminationRate <= 35) return 'bg-yellow-500';
+    if (earlyTerminationRate <= 25) return 'bg-green-500';
+    if (earlyTerminationRate <= 40) return 'bg-yellow-500';
     return 'bg-red-500';
   };
 
   const getCompletionTextColor = (earlyTerminationRate: number): string => {
-    if (earlyTerminationRate <= 20) return 'text-green-700 dark:text-green-300';
-    if (earlyTerminationRate <= 35) return 'text-yellow-700 dark:text-yellow-300';
+    if (earlyTerminationRate <= 25) return 'text-green-700 dark:text-green-300';
+    if (earlyTerminationRate <= 40) return 'text-yellow-700 dark:text-yellow-300';
     return 'text-red-700 dark:text-red-300';
   };
 
@@ -530,7 +530,7 @@ const Dashboard: React.FC = () => {
                         {agency.agency_name}
                       </h3>
                       <p className="text-xs text-gray-600 dark:text-gray-300">
-                        {agency.total_started} Angetreten, {agency.total_started - agency.total_completed} Vorzeitig beendet
+                        {agency.total_started} Abgeschlossen, {agency.total_started - agency.total_completed} Vorzeitig beendet
                       </p>
                     </div>
                   </div>

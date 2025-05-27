@@ -904,7 +904,7 @@ ORDER BY
 # Query for all agencies completion stats (dashboard widget)
 GET_ALL_AGENCIES_COMPLETION_STATS = """
 WITH agency_started AS (
-  -- Alle angetretenen Einsätze pro Agentur (Basis für Durchführungsrate)
+  -- NUR ABGESCHLOSSENE angetretene Einsätze pro Agentur (mit departure in Vergangenheit)
   SELECT 
     c.agency_id,
     a.name AS agency_name,
@@ -936,6 +936,10 @@ WITH agency_started AS (
           AND TIMESTAMP(JSON_EXTRACT_SCALAR(track, '$.created_at')) < TIMESTAMP(cs.arrival)
       )
     )
+    -- NUR ABGESCHLOSSENE EINSÄTZE (departure in Vergangenheit)
+    AND cs.departure IS NOT NULL
+    AND cs.departure != ''
+    AND TIMESTAMP(cs.departure) < CURRENT_TIMESTAMP()
   GROUP BY 
     c.agency_id, a.name
 ),

@@ -649,7 +649,7 @@ async def get_early_terminations_details(
                     -- Must have a departure date
                     AND cs.departure IS NOT NULL
                     AND cs.departure != ''
-                    -- Departure must be in the past
+                    -- Departure must be in the past (only completed stays)
                     AND TIMESTAMP(cs.departure) < CURRENT_TIMESTAMP()
             ),
             departure_changes AS (
