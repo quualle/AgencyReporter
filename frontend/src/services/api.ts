@@ -566,6 +566,31 @@ export const apiService = {
   },
 
   // Problematic Stays API
+  getDashboardProblematicOverview: async (
+    timePeriod: string = 'last_quarter',
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
+    try {
+      const data = await cachedApiCall(
+        `/problematic_stays/dashboard-overview`,
+        { time_period: timePeriod },
+        { useExtendedCache, forceRefresh }
+      );
+      
+      console.log(`✅ Got dashboard problematic overview for period ${timePeriod}`);
+      return data;
+    } catch (error) {
+      console.error('Error fetching dashboard problematic overview:', error);
+      
+      return {
+        time_period: timePeriod,
+        data: [],
+        count: 0
+      };
+    }
+  },
+
   getProblematicStaysOverview: async (
     agencyId?: string, 
     timePeriod: string = 'last_quarter',

@@ -23,6 +23,7 @@ interface AgencyConversionData {
   total_postings: number;
   total_confirmed: number;
   total_started: number;
+  total_cancelled_before_arrival: number;
 }
 
 interface AgencyCompletionData {
@@ -32,6 +33,7 @@ interface AgencyCompletionData {
   early_termination_rate: number;
   total_started: number;
   total_completed: number;
+  total_shortened: number;
 }
 
 const Dashboard: React.FC = () => {
@@ -74,80 +76,58 @@ const Dashboard: React.FC = () => {
         
         console.log(`📊 Fetching dashboard data for period: ${timePeriod}`);
         
-        // Schritt 1: Problematische Einsätze laden
-        const problematicResponse = await apiService.getProblematicStaysOverview(undefined, timePeriod, false, true);
+        // Schritt 1: Dashboard-spezifische Daten laden
+        const dashboardResponse = await apiService.getDashboardProblematicOverview(timePeriod, false, true);
         
-        console.log('Dashboard problematic stays data:', problematicResponse);
+        console.log('Dashboard overview data:', dashboardResponse);
         
-        if (problematicResponse && problematicResponse.data && Array.isArray(problematicResponse.data)) {
-          // Daten nach problematic_percentage sortieren (höchste zuerst)
-          const sortedProblematicData = problematicResponse.data
+        if (dashboardResponse && dashboardResponse.data && Array.isArray(dashboardResponse.data)) {
+          // Verwende die Dashboard-spezifischen Daten für alle drei Widgets
+          
+          // Widget 1: Problematische Einsätze (alle Probleme)
+          const sortedProblematicData = dashboardResponse.data
             .map((item: any) => ({
               agency_id: item.agency_id,
               agency_name: item.agency_name,
-              total_problematic: item.total_problematic || 0,
-              total_stays: item.total_carestays || 0, // Korrektes Feld aus SQL
-              total_confirmed: item.total_confirmed || 0, // Neues Feld für bestätigte Einsätze
-              problematic_rate: item.problematic_percentage || 0 // Korrektes Feld aus SQL
+              total_problematic: item.total_problematic_count || 0,
+              total_stays: item.total_confirmed_stays || 0,
+              total_confirmed: item.total_confirmed_stays || 0,
+              problematic_rate: item.problematic_percentage || 0
             }))
             .sort((a: AgencyProblematicData, b: AgencyProblematicData) => 
               b.problematic_rate - a.problematic_rate
             );
           
           setProblematicData(sortedProblematicData);
-        } else {
-          console.warn('Unexpected problematic data format:', problematicResponse);
-          setProblematicData([]);
-        }
-
-        // Schritt 2: Echte Conversion-Daten für alle Agenturen laden
-        console.log(`📊 Fetching conversion stats for period: ${timePeriod}`);
-        const conversionResponse = await apiService.getAllAgenciesConversionStats(timePeriod, false, true);
-        console.log('Dashboard conversion data:', conversionResponse);
-        
-        // API wraps data in {data: [...]} format
-        const conversionArray = conversionResponse?.data || conversionResponse;
-        
-        if (conversionArray && Array.isArray(conversionArray)) {
-          // Echte Daten verarbeiten und sortieren
-          const sortedConversionData = conversionArray
+          
+          // Widget 2: Conversion-Daten (Abbrüche vor Anreise)
+          const sortedConversionData = dashboardResponse.data
             .map((item: any) => ({
               agency_id: item.agency_id,
               agency_name: item.agency_name,
-              start_rate: item.start_rate || 0,
-              cancellation_rate: item.cancellation_rate || 0,
-              total_postings: item.total_postings || 0,
-              total_confirmed: item.total_confirmed || 0,
-              total_started: item.total_started || 0
+              start_rate: 100 - item.cancellation_percentage, // Umkehrung für Konsistenz
+              cancellation_rate: item.cancellation_percentage || 0,
+              total_postings: item.total_confirmed_stays || 0,
+              total_confirmed: item.total_confirmed_stays || 0,
+              total_started: item.total_confirmed_stays - item.cancelled_before_arrival_count,
+              total_cancelled_before_arrival: item.cancelled_before_arrival_count || 0
             }))
             .sort((a: AgencyConversionData, b: AgencyConversionData) => 
-              a.start_rate - b.start_rate // Niedrigere start_rate = höhere Abbruchrate, also umgekehrt sortieren
+              b.cancellation_rate - a.cancellation_rate // Höchste Abbruchrate zuerst
             );
           
           setConversionData(sortedConversionData);
-        } else {
-          console.warn('Unexpected conversion data format:', conversionResponse);
-          setConversionData([]);
-        }
-
-        // Schritt 3: Completion-Daten für alle Agenturen laden
-        console.log(`📊 Fetching completion stats for period: ${timePeriod}`);
-        const completionResponse = await apiService.getAllAgenciesCompletionStats(timePeriod, false, true);
-        console.log('Dashboard completion data:', completionResponse);
-        
-        // API wraps data in {data: [...]} format
-        const completionArray = completionResponse?.data || completionResponse;
-        
-        if (completionArray && Array.isArray(completionArray)) {
-          // Echte Daten verarbeiten und sortieren
-          const sortedCompletionData = completionArray
+          
+          // Widget 3: Completion-Daten (Vorzeitige Beendigungen nach Anreise)
+          const sortedCompletionData = dashboardResponse.data
             .map((item: any) => ({
               agency_id: item.agency_id,
               agency_name: item.agency_name,
-              completion_rate: item.completion_rate || 0,
-              early_termination_rate: item.early_termination_rate || 0,
-              total_started: item.total_started || 0,
-              total_completed: item.total_completed || 0
+              completion_rate: 100 - item.early_termination_percentage,
+              early_termination_rate: item.early_termination_percentage || 0,
+              total_started: item.total_confirmed_stays || 0,
+              total_completed: item.total_confirmed_stays - item.shortened_after_arrival_count,
+              total_shortened: item.shortened_after_arrival_count || 0
             }))
             .sort((a: AgencyCompletionData, b: AgencyCompletionData) => 
               b.early_termination_rate - a.early_termination_rate // Höchste Abbruchrate zuerst
@@ -155,9 +135,13 @@ const Dashboard: React.FC = () => {
           
           setCompletionData(sortedCompletionData);
         } else {
-          console.warn('Unexpected completion data format:', completionResponse);
+          console.warn('Unexpected dashboard data format:', dashboardResponse);
+          setProblematicData([]);
+          setConversionData([]);
           setCompletionData([]);
         }
+
+        // Keine weiteren API-Calls nötig - alle Daten kommen aus einem einzigen Call!
         
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
@@ -416,13 +400,13 @@ const Dashboard: React.FC = () => {
                         {agency.agency_name}
                       </h3>
                       <p className="text-xs text-gray-600 dark:text-gray-300">
-                        {agency.total_confirmed} Bestätigte, {agency.total_confirmed - agency.total_started} Abgebrochen
+                        {agency.total_cancelled_before_arrival} von {agency.total_confirmed} bestätigt
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className={`text-lg font-bold ${getConversionTextColor(100 - agency.start_rate)}`}>
-                      {(100 - agency.start_rate).toFixed(1)}%
+                    <div className={`text-lg font-bold ${getConversionTextColor(agency.cancellation_rate)}`}>
+                      {agency.cancellation_rate.toFixed(1)}%
                     </div>
                     <div className="text-xs text-gray-500">
                       Abbruch vor Anreise
@@ -504,7 +488,7 @@ const Dashboard: React.FC = () => {
                         {agency.agency_name}
                       </h3>
                       <p className="text-xs text-gray-600 dark:text-gray-300">
-                        {agency.total_started - agency.total_completed} von {agency.total_started} vorzeitig beendet
+                        {agency.total_shortened} von {agency.total_started} bestätigt
                       </p>
                     </div>
                   </div>

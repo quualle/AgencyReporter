@@ -16,6 +16,9 @@ from ..queries.problematic_stays.queries import (
     GET_PROBLEMATIC_STAYS_CUSTOMER_SATISFACTION,
     GET_PROBLEMATIC_STAYS_TREND_ANALYSIS
 )
+from ..queries.problematic_stays.dashboard_queries import (
+    GET_DASHBOARD_PROBLEMATIC_OVERVIEW
+)
 from datetime import datetime, timedelta
 import random  # Für Demo-Daten
 import logging
@@ -955,4 +958,68 @@ async def get_problematic_stays_details(
         
     except Exception as e:
         logger.error(f"Error fetching problematic stays details: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.get("/dashboard-overview")
+@cache_endpoint(ttl_hours=24, key_params=['time_period'], cache_key_prefix="/problematic_stays/dashboard-overview")
+async def get_dashboard_overview(
+    time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
+):
+    """
+    Dashboard-spezifische Übersicht mit konsistenten Zahlen basierend auf bestätigten Care Stays.
+    Liefert für alle Agenturen:
+    - total_confirmed_stays: Anzahl bestätigter Care Stays
+    - cancelled_before_arrival_count: Anzahl Abbrüche vor Anreise
+    - shortened_after_arrival_count: Anzahl vorzeitiger Beendigungen nach Anreise
+    - total_problematic_count: Gesamtzahl problematischer Einsätze
+    """
+    try:
+        # Setup date range based on time_period
+        today = datetime.now()
+        
+        if time_period == "last_month":
+            start_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+        elif time_period == "last_quarter":
+            start_date = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+        elif time_period == "last_year":
+            start_date = (today - timedelta(days=365)).strftime("%Y-%m-%d")
+        else:  # all_time
+            start_date = "2020-01-01"
+            
+        end_date = today.strftime("%Y-%m-%d")
+        
+        # Execute the dashboard-specific query
+        connection = BigQueryConnection()
+        query_params = {
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        
+        results = connection.execute_query(GET_DASHBOARD_PROBLEMATIC_OVERVIEW, query_params)
+        
+        # Process and format the results
+        dashboard_data = []
+        for row in results:
+            dashboard_data.append({
+                "agency_id": row.get("agency_id"),
+                "agency_name": row.get("agency_name"),
+                "total_confirmed_stays": int(row.get("total_confirmed_stays", 0)),
+                "cancelled_before_arrival_count": int(row.get("cancelled_before_arrival_count", 0)),
+                "shortened_after_arrival_count": int(row.get("shortened_after_arrival_count", 0)),
+                "total_problematic_count": int(row.get("total_problematic_count", 0)),
+                "problematic_percentage": float(row.get("problematic_percentage", 0)),
+                "cancellation_percentage": float(row.get("cancellation_percentage", 0)),
+                "early_termination_percentage": float(row.get("early_termination_percentage", 0))
+            })
+        
+        return {
+            "time_period": time_period,
+            "start_date": start_date,
+            "end_date": end_date,
+            "data": dashboard_data,
+            "count": len(dashboard_data)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching dashboard overview: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}") 
