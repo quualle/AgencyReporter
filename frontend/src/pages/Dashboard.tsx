@@ -502,7 +502,7 @@ const Dashboard: React.FC = () => {
                         {agency.agency_name}
                       </h3>
                       <p className="text-xs text-gray-600 dark:text-gray-300">
-                        {agency.total_started} Abgeschlossen, {agency.total_started - agency.total_completed} Vorzeitig beendet
+                        {agency.total_started - agency.total_completed} von {agency.total_started} vorzeitig beendet
                       </p>
                     </div>
                   </div>
