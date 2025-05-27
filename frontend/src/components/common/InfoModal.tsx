@@ -123,7 +123,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, type }) => {
             
             <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
               <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                Erfasst werden <strong>abgeschlossene</strong> Einsätze mit erheblicher Verkürzung nach erfolgter Anreise.
+                Erfasst werden <strong>angetretene</strong> Einsätze mit erheblicher Verkürzung nach erfolgter Anreise.
               </p>
             </div>
 
