@@ -27,6 +27,8 @@ class DatabaseCacheService:
     
     def __init__(self):
         self.db_manager = get_database_manager()
+        # Add a lock to prevent concurrent SQLite writes
+        self._write_lock = asyncio.Lock()
     
     @staticmethod
     def create_cache_key(endpoint: str, params: Dict[str, Any] = None) -> str:
@@ -111,57 +113,59 @@ class DatabaseCacheService:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                # Use a new session for each attempt to avoid state issues
-                async with self.db_manager.get_async_session() as session:
-                    try:
-                        # Check if entry exists first
-                        existing_result = await session.execute(
-                            select(CachedData).where(CachedData.cache_key == cache_key)
-                        )
-                        existing_entry = existing_result.scalar_one_or_none()
-                        
-                        if existing_entry:
-                            # Update existing entry
-                            existing_entry.set_data(data)
-                            existing_entry.set_parameters(params)
-                            existing_entry.created_at = datetime.utcnow()
-                            existing_entry.set_expiry(expires_hours)
-                            existing_entry.is_preloaded = is_preloaded
-                            logger.debug(f"Updated existing cache entry for key: {cache_key}")
-                        else:
-                            # Create new entry
-                            cache_entry = CachedData(
-                                cache_key=cache_key,
-                                endpoint=endpoint,
-                                agency_id=agency_id,
-                                time_period=time_period,
-                                is_preloaded=is_preloaded
-                            )
-                            cache_entry.set_data(data)
-                            cache_entry.set_parameters(params)
-                            cache_entry.set_expiry(expires_hours)
-                            
-                            session.add(cache_entry)
-                            logger.debug(f"Created new cache entry for key: {cache_key}")
-                        
-                        # Commit the cache data first
-                        await session.commit()
-                        
-                        logger.debug(f"Saved cache entry for key: {cache_key}")
-                        
-                        # Update data freshness in background to avoid blocking
-                        asyncio.create_task(
-                            self._update_data_freshness_background(endpoint, agency_id, time_period, expires_hours)
-                        )
-                        
-                        return True
-                        
-                    except Exception as e:
+                # Acquire write lock to prevent concurrent SQLite writes
+                async with self._write_lock:
+                    # Use a new session for each attempt to avoid state issues
+                    async with self.db_manager.get_async_session() as session:
                         try:
-                            await session.rollback()
-                        except:
-                            pass  # Ignore rollback errors
-                        raise e
+                            # Check if entry exists first
+                            existing_result = await session.execute(
+                                select(CachedData).where(CachedData.cache_key == cache_key)
+                            )
+                            existing_entry = existing_result.scalar_one_or_none()
+                            
+                            if existing_entry:
+                                # Update existing entry
+                                existing_entry.set_data(data)
+                                existing_entry.set_parameters(params)
+                                existing_entry.created_at = datetime.utcnow()
+                                existing_entry.set_expiry(expires_hours)
+                                existing_entry.is_preloaded = is_preloaded
+                                logger.debug(f"Updated existing cache entry for key: {cache_key}")
+                            else:
+                                # Create new entry
+                                cache_entry = CachedData(
+                                    cache_key=cache_key,
+                                    endpoint=endpoint,
+                                    agency_id=agency_id,
+                                    time_period=time_period,
+                                    is_preloaded=is_preloaded
+                                )
+                                cache_entry.set_data(data)
+                                cache_entry.set_parameters(params)
+                                cache_entry.set_expiry(expires_hours)
+                                
+                                session.add(cache_entry)
+                                logger.debug(f"Created new cache entry for key: {cache_key}")
+                            
+                            # Commit the cache data first
+                            await session.commit()
+                            
+                            logger.debug(f"Saved cache entry for key: {cache_key}")
+                            
+                            # Update data freshness in background to avoid blocking
+                            asyncio.create_task(
+                                self._update_data_freshness_background(endpoint, agency_id, time_period, expires_hours)
+                            )
+                            
+                            return True
+                            
+                        except Exception as e:
+                            try:
+                                await session.rollback()
+                            except:
+                                pass  # Ignore rollback errors
+                            raise e
                     
             except Exception as e:
                 logger.warning(f"Attempt {attempt + 1} failed saving cache key {cache_key}: {e}")

@@ -4,10 +4,12 @@ from ..utils.query_manager import QueryManager
 from ..models import TimeFilter, AgencyRequest
 from ..dependencies import get_settings
 from ..services.database_cache_service import get_cache_service
+from ..utils.cache_decorator import cache_endpoint
 
 router = APIRouter()
 
 @router.get("/postings")
+@cache_endpoint(ttl_hours=24, key_params=['time_period'], cache_key_prefix="/quotas/postings")
 async def get_posting_metrics(
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
@@ -22,6 +24,7 @@ async def get_posting_metrics(
         raise HTTPException(status_code=500, detail=f"Failed to fetch posting metrics: {str(e)}")
 
 @router.get("/{agency_id}/reservations")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period', 'start_date', 'end_date'], cache_key_prefix="/quotas/reservations")
 async def get_agency_reservation_metrics(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$"),
@@ -44,6 +47,7 @@ async def get_agency_reservation_metrics(
         raise HTTPException(status_code=500, detail=f"Failed to fetch reservation metrics: {str(e)}")
 
 @router.get("/{agency_id}/fulfillment", deprecated=True)
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/quotas/fulfillment")
 async def get_fulfillment_rate(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -64,6 +68,7 @@ async def get_fulfillment_rate(
         raise HTTPException(status_code=500, detail=f"Failed to fetch fulfillment rate: {str(e)}")
 
 @router.get("/{agency_id}/reservation-fulfillment")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/quotas/reservation-fulfillment")
 async def get_reservation_fulfillment_rate(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -83,6 +88,7 @@ async def get_reservation_fulfillment_rate(
         raise HTTPException(status_code=500, detail=f"Failed to fetch reservation fulfillment rate: {str(e)}")
 
 @router.get("/{agency_id}/withdrawal")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/quotas/withdrawal")
 async def get_withdrawal_rate(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -102,6 +108,7 @@ async def get_withdrawal_rate(
         raise HTTPException(status_code=500, detail=f"Failed to fetch withdrawal rate: {str(e)}")
 
 @router.get("/{agency_id}/pending")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/quotas/pending")
 async def get_pending_rate(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -121,6 +128,7 @@ async def get_pending_rate(
         raise HTTPException(status_code=500, detail=f"Failed to fetch pending rate: {str(e)}")
 
 @router.get("/{agency_id}/arrival")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/quotas/arrival")
 async def get_arrival_metrics(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -162,6 +170,7 @@ async def get_arrival_metrics(
         raise HTTPException(status_code=500, detail=f"Failed to fetch arrival metrics: {str(e)}")
 
 @router.get("/{agency_id}/cancellation-before-arrival")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/quotas/cancellation-before-arrival")
 async def get_cancellation_before_arrival_rate(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -171,35 +180,17 @@ async def get_cancellation_before_arrival_rate(
     (Quote 6: Anzahl gemachter Personalvorschläge - Anzahl VOR Einsatz abgebrochener Pflegeeinsätze)
     """
     try:
-        # Check cache first
-        cache_service = get_cache_service()
-        endpoint = f"/quotas/{agency_id}/cancellation-before-arrival"
-        cache_key = cache_service.create_cache_key(endpoint, {"time_period": time_period})
-        cached_data = await cache_service.get_cached_data(cache_key)
-        if cached_data is not None:
-            return cached_data.get("data", cached_data)
-        
         query_manager = QueryManager()
         cancellation_metrics = query_manager.get_cancellation_before_arrival_rate(
             agency_id=agency_id,
             time_period=time_period
         )
-        
-        # Save to cache
-        await cache_service.save_cached_data(
-            cache_key=cache_key,
-            data={"data": cancellation_metrics},
-            endpoint=endpoint,
-            agency_id=agency_id,
-            time_period=time_period,
-            expires_hours=48
-        )
-        
         return cancellation_metrics
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch cancellation before arrival rate: {str(e)}")
 
 @router.get("/all-agencies/completion")
+@cache_endpoint(ttl_hours=24, key_params=['time_period'], cache_key_prefix="/quotas/all-agencies/completion")
 async def get_all_agencies_completion_stats(
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
@@ -209,31 +200,14 @@ async def get_all_agencies_completion_stats(
     Returns: agency_id, agency_name, completion_rate, early_termination_rate, total_started, total_completed
     """
     try:
-        # Check cache first
-        cache_service = get_cache_service()
-        endpoint = f"/quotas/all-agencies/completion"
-        cache_key = cache_service.create_cache_key(endpoint, {"time_period": time_period})
-        cached_data = await cache_service.get_cached_data(cache_key)
-        if cached_data is not None:
-            return cached_data.get("data", cached_data)
-        
         query_manager = QueryManager()
         completion_stats = query_manager.get_all_agencies_completion_stats(time_period)
-        
-        # Save to cache
-        await cache_service.save_cached_data(
-            cache_key=cache_key,
-            data={"data": completion_stats},
-            endpoint=endpoint,
-            agency_id=None,  # All agencies
-            time_period=time_period
-        )
-        
         return completion_stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch all agencies completion stats: {str(e)}")
 
 @router.get("/{agency_id}/completion")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/quotas/completion")
 async def get_completion_rate(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -253,6 +227,7 @@ async def get_completion_rate(
         raise HTTPException(status_code=500, detail=f"Failed to fetch completion rate: {str(e)}")
 
 @router.get("/{agency_id}/all")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period', 'start_date', 'end_date'], cache_key_prefix="/quotas/all")
 async def get_all_quotas(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$"),
@@ -263,19 +238,6 @@ async def get_all_quotas(
     Get all quota metrics for a specific agency
     """
     try:
-        # Check cache first
-        cache_service = get_cache_service()
-        endpoint = f"/quotas/{agency_id}/all"
-        params = {"time_period": time_period}
-        if start_date:
-            params["start_date"] = start_date
-        if end_date:
-            params["end_date"] = end_date
-        cache_key = cache_service.create_cache_key(endpoint, params)
-        cached_data = await cache_service.get_cached_data(cache_key)
-        if cached_data is not None:
-            return cached_data.get("data", cached_data)
-        
         query_manager = QueryManager()
         all_quotas = query_manager.get_all_quotas(
             agency_id=agency_id,
@@ -283,17 +245,6 @@ async def get_all_quotas(
             end_date=end_date,
             time_period=time_period
         )
-        
-        # Save to cache
-        await cache_service.save_cached_data(
-            cache_key=cache_key,
-            data={"data": all_quotas},
-            endpoint=endpoint,
-            agency_id=agency_id,
-            time_period=time_period,
-            expires_hours=48
-        )
-        
         return all_quotas
     except Exception as e:
         # Check if it's a specific timestamp error and provide a more helpful message
@@ -376,6 +327,7 @@ async def get_custom_metrics(request: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=f"Failed to fetch custom metrics: {str(e)}")
 
 @router.get("/stats/overall/cancellation-before-arrival")
+@cache_endpoint(ttl_hours=24, key_params=['start_date', 'end_date', 'time_period'], cache_key_prefix="/quotas/stats/overall/cancellation-before-arrival")
 async def get_overall_cancellation_stats(
     start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
@@ -392,6 +344,7 @@ async def get_overall_cancellation_stats(
         raise HTTPException(status_code=500, detail=f"Failed to fetch overall cancellation before arrival stats: {str(e)}")
 
 @router.get("/all-agencies/conversion")
+@cache_endpoint(ttl_hours=24, key_params=['time_period'], cache_key_prefix="/quotas/all-agencies/conversion")
 async def get_all_agencies_conversion_stats(
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
 ):
@@ -400,32 +353,15 @@ async def get_all_agencies_conversion_stats(
     Returns: agency_id, agency_name, start_rate, cancellation_rate, total_postings
     """
     try:
-        # Check cache first
-        cache_service = get_cache_service()
-        endpoint = f"/quotas/all-agencies/conversion"
-        cache_key = cache_service.create_cache_key(endpoint, {"time_period": time_period})
-        cached_data = await cache_service.get_cached_data(cache_key)
-        if cached_data is not None:
-            return cached_data.get("data", cached_data)
-        
         query_manager = QueryManager()
         conversion_stats = query_manager.get_all_agencies_conversion_stats(time_period)
-        
-        # Save to cache
-        await cache_service.save_cached_data(
-            cache_key=cache_key,
-            data={"data": conversion_stats},
-            endpoint=endpoint,
-            agency_id=None,  # All agencies
-            time_period=time_period
-        )
-        
         return conversion_stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch all agencies conversion stats: {str(e)}")
 
 
 @router.get("/{agency_id}/cancellations-before-arrival/details")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/quotas/cancellations-before-arrival/details")
 async def get_cancellations_before_arrival_details(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -435,13 +371,6 @@ async def get_cancellations_before_arrival_details(
     Returns individual care stay records that were cancelled before arrival.
     """
     try:
-        # Check cache first
-        cache_service = get_cache_service()
-        endpoint = f"/quotas/{agency_id}/cancellations-before-arrival/details"
-        cache_key = cache_service.create_cache_key(endpoint, {"time_period": time_period})
-        cached_data = await cache_service.get_cached_data(cache_key)
-        if cached_data is not None:
-            return cached_data.get("data", cached_data)
         
         query_manager = QueryManager()
         
@@ -560,16 +489,6 @@ async def get_cancellations_before_arrival_details(
             "grouped_by_month": grouped_data
         }
         
-        # Cache the result
-        await cache_service.save_cached_data(
-            cache_key=cache_key,
-            data={"data": result},
-            endpoint=endpoint,
-            agency_id=agency_id,
-            time_period=time_period,
-            expires_hours=24
-        )
-        
         return result
         
     except Exception as e:
@@ -577,6 +496,7 @@ async def get_cancellations_before_arrival_details(
 
 
 @router.get("/{agency_id}/early-terminations/details")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/quotas/early-terminations/details")
 async def get_early_terminations_details(
     agency_id: str,
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -586,13 +506,6 @@ async def get_early_terminations_details(
     Returns individual care stay records that were terminated early (based on 33% rule).
     """
     try:
-        # Check cache first
-        cache_service = get_cache_service()
-        endpoint = f"/quotas/{agency_id}/early-terminations/details"
-        cache_key = cache_service.create_cache_key(endpoint, {"time_period": time_period})
-        cached_data = await cache_service.get_cached_data(cache_key)
-        if cached_data is not None:
-            return cached_data.get("data", cached_data)
         
         query_manager = QueryManager()
         
@@ -792,16 +705,6 @@ async def get_early_terminations_details(
             "total_count": len(details),
             "grouped_by_month": grouped_data
         }
-        
-        # Cache the result
-        await cache_service.save_cached_data(
-            cache_key=cache_key,
-            data={"data": result},
-            endpoint=endpoint,
-            agency_id=agency_id,
-            time_period=time_period,
-            expires_hours=24
-        )
         
         return result
         

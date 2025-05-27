@@ -5,6 +5,7 @@ from ..utils.bigquery_connection import BigQueryConnection
 from ..models import TimeFilter, AgencyRequest
 from ..dependencies import get_settings
 from ..services.database_cache_service import get_cache_service
+from ..utils.cache_decorator import cache_endpoint
 from ..queries.problematic_stays.queries import (
     GET_PROBLEMATIC_STAYS_OVERVIEW,
     GET_PROBLEMATIC_STAYS_REASONS,
@@ -17,10 +18,14 @@ from ..queries.problematic_stays.queries import (
 )
 from datetime import datetime, timedelta
 import random  # Für Demo-Daten
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 @router.get("/overview")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/problematic_stays/overview")
 async def get_problematic_stays_overview(
     agency_id: Optional[str] = QueryParam(None),
     time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -31,13 +36,6 @@ async def get_problematic_stays_overview(
     Event-Typ, Stay-Typ, Ersatzstellungen und Kundenzufriedenheit.
     """
     try:
-        # Check cache first
-        cache_service = get_cache_service()
-        endpoint = f"/problematic_stays/overview"
-        cache_key = cache_service.create_cache_key(endpoint, {"agency_id": agency_id, "time_period": time_period})
-        cached_data = await cache_service.get_cached_data(cache_key)
-        if cached_data is not None:
-            return cached_data.get("data", cached_data)
         
         # Setup date range based on time_period
         today = datetime.now()
@@ -95,21 +93,12 @@ async def get_problematic_stays_overview(
                 "count": len(overview_data)
             }
         
-        # Save to cache
-        await cache_service.save_cached_data(
-            cache_key=cache_key,
-            data={"data": result},
-            endpoint=endpoint,
-            agency_id=agency_id,
-            time_period=time_period,
-            expires_hours=48
-        )
-        
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays overview: {str(e)}")
 
 @router.get("/reasons")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'event_type', 'time_period'], cache_key_prefix="/problematic_stays/reasons")
 async def get_problematic_stays_reasons(
     agency_id: Optional[str] = QueryParam(None),
     event_type: Optional[str] = QueryParam(None, regex="^(cancelled_before_arrival|shortened_after_arrival|)$"),
@@ -182,6 +171,7 @@ async def get_problematic_stays_reasons(
         raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays reasons: {str(e)}")
 
 @router.get("/time-analysis")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'event_type', 'stay_type', 'time_period'], cache_key_prefix="/problematic-stays/time-analysis")
 async def get_problematic_stays_time_analysis(
     agency_id: Optional[str] = QueryParam(None),
     event_type: Optional[str] = QueryParam(None, regex="^(cancelled_before_arrival|shortened_after_arrival|)$"),
@@ -258,6 +248,7 @@ async def get_problematic_stays_time_analysis(
         raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays time analysis: {str(e)}")
 
 @router.get("/{agency_id}/detailed")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'event_type', 'stay_type', 'time_period', 'limit'], cache_key_prefix="/problematic-stays/detailed")
 async def get_problematic_stays_detailed(
     agency_id: str,
     event_type: Optional[str] = QueryParam(None, regex="^(cancelled_before_arrival|shortened_after_arrival|)$"),
@@ -355,6 +346,7 @@ async def get_problematic_stays_detailed(
         raise HTTPException(status_code=500, detail=f"Failed to fetch detailed problematic stays: {str(e)}")
 
 @router.get("/heatmap")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'event_type', 'stay_type', 'time_period'], cache_key_prefix="/problematic-stays/heatmap")
 async def get_problematic_stays_heatmap(
     agency_id: Optional[str] = QueryParam(None),
     event_type: Optional[str] = QueryParam(None, regex="^(cancelled_before_arrival|shortened_after_arrival|)$"),
@@ -431,6 +423,7 @@ async def get_problematic_stays_heatmap(
         raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays heatmap: {str(e)}")
 
 @router.get("/instant-departures")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/problematic-stays/instant-departures")
 async def get_problematic_stays_instant_departures(
     agency_id: Optional[str] = QueryParam(None),
     time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -499,6 +492,7 @@ async def get_problematic_stays_instant_departures(
         raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays instant departures: {str(e)}")
 
 @router.get("/replacement-analysis")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/problematic-stays/replacement-analysis")
 async def get_problematic_stays_replacement_analysis(
     agency_id: Optional[str] = QueryParam(None),
     time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -568,6 +562,7 @@ async def get_problematic_stays_replacement_analysis(
         raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays replacement analysis: {str(e)}")
 
 @router.get("/customer-satisfaction")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/problematic-stays/customer-satisfaction")
 async def get_problematic_stays_customer_satisfaction(
     agency_id: Optional[str] = QueryParam(None),
     time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -637,6 +632,7 @@ async def get_problematic_stays_customer_satisfaction(
         raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays customer satisfaction: {str(e)}")
 
 @router.get("/trend-analysis")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'event_type', 'stay_type', 'time_period'], cache_key_prefix="/problematic-stays/trend-analysis")
 async def get_problematic_stays_trend_analysis(
     agency_id: Optional[str] = QueryParam(None),
     event_type: Optional[str] = QueryParam(None, regex="^(cancelled_before_arrival|shortened_after_arrival|)$"),
@@ -713,6 +709,7 @@ async def get_problematic_stays_trend_analysis(
         raise HTTPException(status_code=500, detail=f"Failed to fetch problematic stays trend analysis: {str(e)}")
 
 @router.get("/cancellation-lead-time")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period'], cache_key_prefix="/problematic-stays/cancellation-lead-time")
 async def get_problematic_stays_cancellation_lead_time(
     agency_id: Optional[str] = QueryParam(None),
     time_period: str = QueryParam("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -789,6 +786,7 @@ async def get_problematic_stays_cancellation_lead_time(
 
 
 @router.get("/details/{agency_id}")
+@cache_endpoint(ttl_hours=24, key_params=['agency_id', 'time_period', 'event_type'], cache_key_prefix="/problematic-stays/details")
 async def get_problematic_stays_details(
     agency_id: str,
     time_period: str = QueryParam("last_quarter", description="Time period filter"),
@@ -799,18 +797,6 @@ async def get_problematic_stays_details(
     Returns individual care stay records with customer info, dates, and reasons.
     """
     try:
-        # Check cache first
-        cache_service = get_cache_service()
-        endpoint = f"/problematic_stays/details/{agency_id}"
-        params = {"time_period": time_period}
-        if event_type:
-            params["event_type"] = event_type
-            
-        cache_key = cache_service.create_cache_key(endpoint, params)
-        cached_data = await cache_service.get_cached_data(cache_key)
-        if cached_data is not None:
-            return cached_data.get("data", cached_data)
-        
         # Calculate date range
         today = datetime.today()
         if time_period == "last_month":
@@ -958,7 +944,7 @@ async def get_problematic_stays_details(
                 "stays": grouped_by_month[month]
             })
         
-        result = {
+        return {
             "agency_id": agency_id,
             "agency_name": results[0].get("agency_name") if results else "Unknown",
             "time_period": time_period,
@@ -966,18 +952,6 @@ async def get_problematic_stays_details(
             "total_count": len(details),
             "grouped_by_month": grouped_data
         }
-        
-        # Cache the result
-        await cache_service.save_cached_data(
-            cache_key=cache_key,
-            data={"data": result},
-            endpoint=endpoint,
-            agency_id=agency_id,
-            time_period=time_period,
-            expires_hours=24
-        )
-        
-        return result
         
     except Exception as e:
         logger.error(f"Error fetching problematic stays details: {str(e)}")

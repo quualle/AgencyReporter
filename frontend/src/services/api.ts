@@ -126,13 +126,15 @@ export const cachedApiCall = async (
   // Extract metadata
   const { agencyId, timePeriod } = databaseCache.extractMetadata(endpoint, params);
   
+  // TEMPORÄR DEAKTIVIERT: Frontend-Cache wird übersprungen
+  // Backend-Cache-Decorator übernimmt das Caching
   // Try database cache first (unless forcing refresh)
-  if (!forceRefresh) {
-    const cachedData = await databaseCache.getFromCache(cacheKey);
-    if (cachedData) {
-      return cachedData;
-    }
-  }
+  // if (!forceRefresh) {
+  //   const cachedData = await databaseCache.getFromCache(cacheKey);
+  //   if (cachedData) {
+  //     return cachedData;
+  //   }
+  // }
   
   // Make API call
   const queryParams = new URLSearchParams();
@@ -148,16 +150,18 @@ export const cachedApiCall = async (
   const response = await api.get(url);
   const data = response.data;
   
+  // TEMPORÄR DEAKTIVIERT: Frontend-Cache wird übersprungen
+  // Backend-Cache-Decorator übernimmt das Caching
   // Save to database cache
-  await databaseCache.saveToCache(
-    cacheKey,
-    data,
-    endpoint,
-    agencyId,
-    timePeriod,
-    params,
-    useExtendedCache
-  );
+  // await databaseCache.saveToCache(
+  //   cacheKey,
+  //   data,
+  //   endpoint,
+  //   agencyId,
+  //   timePeriod,
+  //   params,
+  //   useExtendedCache
+  // );
   
   return data;
 };

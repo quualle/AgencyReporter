@@ -5,10 +5,12 @@ from ..models import ResponseTimeData as ReactionTimeData, TimeFilter, AgencyReq
 from ..dependencies import get_settings
 from ..utils.query_manager import QueryManager
 from ..services.database_cache_service import get_cache_service
+from ..utils.cache_decorator import cache_endpoint
 
 router = APIRouter()
 
 @router.get("/{agency_id}", response_model=ReactionTimeData)
+@cache_endpoint(ttl_hours=48, key_params=['agency_id', 'time_period'], cache_key_prefix="/reaction_times")
 async def get_agency_reaction_times(
     agency_id: str, 
     time_period: str = Query("last_quarter", regex="^(last_quarter|last_month|last_year|all_time)$")
@@ -17,35 +19,12 @@ async def get_agency_reaction_times(
     Get reaction times for a specific agency
     """
     try:
-        # Check cache first
-        cache_service = get_cache_service()
-        endpoint = f"/reaction_times/{agency_id}"
-        cache_key = cache_service.create_cache_key(endpoint, {"time_period": time_period})
-        cached_data = await cache_service.get_cached_data(cache_key)
-        if cached_data is not None:
-            cached_result = cached_data.get("data", cached_data)
-            # Convert dict to ReactionTimeData if needed
-            if isinstance(cached_result, dict):
-                return ReactionTimeData(**cached_result)
-            return cached_result
-        
         bq = BigQueryConnection()
         reaction_time_data = bq.get_response_times_by_agency(agency_id, time_period)
         
         # If no data is found
         if not reaction_time_data:
             reaction_time_data = ReactionTimeData(agency_id=agency_id)
-        
-        # Save to cache (convert to dict for serialization)
-        data_dict = reaction_time_data.dict() if hasattr(reaction_time_data, 'dict') else reaction_time_data
-        await cache_service.save_cached_data(
-            cache_key=cache_key,
-            data={"data": data_dict},
-            endpoint=endpoint,
-            agency_id=agency_id,
-            time_period=time_period,
-            expires_hours=48
-        )
         
         return reaction_time_data
     except Exception as e:
@@ -153,6 +132,7 @@ def _calculate_industry_average(agencies_data: List[Dict[str, Any]]) -> Dict[str
     return averages 
 
 @router.get("/{agency_id}/posting_to_reservation")
+@cache_endpoint(ttl_hours=48, key_params=['agency_id', 'start_date', 'end_date', 'time_period'], cache_key_prefix="/reaction_times/posting_to_reservation")
 async def get_posting_to_reservation_stats(
     agency_id: str,
     start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
@@ -182,6 +162,7 @@ async def get_posting_to_reservation_stats(
         raise HTTPException(status_code=500, detail=f"Failed to fetch posting_to_reservation stats: {str(e)}")
 
 @router.get("/{agency_id}/reservation_to_first_proposal")
+@cache_endpoint(ttl_hours=48, key_params=['agency_id', 'start_date', 'end_date', 'time_period'], cache_key_prefix="/reaction_times/reservation_to_first_proposal")
 async def get_reservation_to_first_proposal_stats(
     agency_id: str,
     start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
@@ -211,6 +192,7 @@ async def get_reservation_to_first_proposal_stats(
         raise HTTPException(status_code=500, detail=f"Failed to fetch reservation_to_first_proposal stats: {str(e)}")
 
 @router.get("/{agency_id}/proposal_to_cancellation")
+@cache_endpoint(ttl_hours=48, key_params=['agency_id', 'start_date', 'end_date', 'time_period'], cache_key_prefix="/reaction_times/proposal_to_cancellation")
 async def get_proposal_to_cancellation_stats(
     agency_id: str,
     start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
@@ -240,6 +222,7 @@ async def get_proposal_to_cancellation_stats(
         raise HTTPException(status_code=500, detail=f"Failed to fetch proposal_to_cancellation stats: {str(e)}")
 
 @router.get("/{agency_id}/arrival_to_cancellation")
+@cache_endpoint(ttl_hours=48, key_params=['agency_id', 'start_date', 'end_date', 'time_period'], cache_key_prefix="/reaction_times/arrival_to_cancellation")
 async def get_arrival_to_cancellation_stats(
     agency_id: str,
     start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
@@ -251,19 +234,6 @@ async def get_arrival_to_cancellation_stats(
     Aufgeteilt in: overall, first_stays (Neukunden), followup_stays (Wechsel)
     """
     try:
-        # Check cache first
-        cache_service = get_cache_service()
-        endpoint = f"/reaction_times/{agency_id}/arrival_to_cancellation"
-        params = {"time_period": time_period}
-        if start_date:
-            params["start_date"] = start_date
-        if end_date:
-            params["end_date"] = end_date
-        cache_key = cache_service.create_cache_key(endpoint, params)
-        cached_data = await cache_service.get_cached_data(cache_key)
-        if cached_data is not None:
-            return cached_data.get("data", cached_data)
-        
         bq = BigQueryConnection()
         if not start_date or not end_date:
             from ..utils.query_manager import QueryManager
@@ -291,16 +261,6 @@ async def get_arrival_to_cancellation_stats(
             "end_date": end_date
         }
         
-        # Save to cache
-        await cache_service.save_cached_data(
-            cache_key=cache_key,
-            data={"data": result},
-            endpoint=endpoint,
-            agency_id=agency_id,
-            time_period=time_period,
-            expires_hours=48
-        )
-        
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch arrival_to_cancellation stats: {str(e)}")
@@ -308,6 +268,7 @@ async def get_arrival_to_cancellation_stats(
 # --- Endpoints for Overall Reaction Time Stats --- 
 
 @router.get("/stats/overall/posting_to_reservation")
+@cache_endpoint(ttl_hours=48, key_params=['start_date', 'end_date', 'time_period'], cache_key_prefix="/reaction_times/stats/overall/posting_to_reservation")
 async def get_overall_posting_to_reservation_stats(
     start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
@@ -324,6 +285,7 @@ async def get_overall_posting_to_reservation_stats(
         raise HTTPException(status_code=500, detail=f"Failed to fetch overall posting_to_reservation stats: {str(e)}")
 
 @router.get("/stats/overall/reservation_to_first_proposal")
+@cache_endpoint(ttl_hours=48, key_params=['start_date', 'end_date', 'time_period'], cache_key_prefix="/reaction_times/stats/overall/reservation_to_first_proposal")
 async def get_overall_reservation_to_first_proposal_stats(
     start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
@@ -340,6 +302,7 @@ async def get_overall_reservation_to_first_proposal_stats(
         raise HTTPException(status_code=500, detail=f"Failed to fetch overall reservation_to_first_proposal stats: {str(e)}")
 
 @router.get("/stats/overall/proposal_to_cancellation")
+@cache_endpoint(ttl_hours=48, key_params=['start_date', 'end_date', 'time_period'], cache_key_prefix="/reaction_times/stats/overall/proposal_to_cancellation")
 async def get_overall_proposal_to_cancellation_stats(
     start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
@@ -356,6 +319,7 @@ async def get_overall_proposal_to_cancellation_stats(
         raise HTTPException(status_code=500, detail=f"Failed to fetch overall proposal_to_cancellation stats: {str(e)}")
 
 @router.get("/stats/overall/arrival_to_cancellation")
+@cache_endpoint(ttl_hours=48, key_params=['start_date', 'end_date', 'time_period'], cache_key_prefix="/reaction_times/stats/overall/arrival_to_cancellation")
 async def get_overall_arrival_to_cancellation_stats(
     start_date: Optional[str] = Query(None, description="Startdatum im Format YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="Enddatum im Format YYYY-MM-DD"),
