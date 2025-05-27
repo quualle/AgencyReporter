@@ -5,6 +5,7 @@ import Loading from '../components/common/Loading';
 import ErrorMessage from '../components/common/ErrorMessage';
 import CacheStats from '../components/common/CacheStats';
 import StayDetailsModal from '../components/common/StayDetailsModal';
+import InfoModal from '../components/common/InfoModal';
 
 interface AgencyProblematicData {
   agency_id: string;
@@ -60,6 +61,9 @@ const Dashboard: React.FC = () => {
     title: '',
     detailType: 'problematic'
   });
+  
+  // State für Info-Modals
+  const [infoModalOpen, setInfoModalOpen] = useState<'problematic' | 'cancellations' | 'terminations' | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -329,7 +333,7 @@ const Dashboard: React.FC = () => {
         {/* Widget 1: Problematische Einsätze */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <div className="flex justify-between items-center mb-4">
-            <div>
+            <div className="flex-1">
               <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center">
                 🚨 Problematische Einsätze
                 <span className="ml-2 text-sm font-normal text-gray-500">
@@ -340,13 +344,24 @@ const Dashboard: React.FC = () => {
                 Agenturen mit den höchsten Problemraten
               </p>
             </div>
-            <button
-              onClick={() => setShowAllProblematic(!showAllProblematic)}
-              className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-colors"
-            >
-              {showAllProblematic ? 'Top 5' : 'Alle'} 
-              <span className="ml-1">{showAllProblematic ? '▲' : '▼'}</span>
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setInfoModalOpen('problematic')}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title="Information anzeigen"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setShowAllProblematic(!showAllProblematic)}
+                className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-colors"
+              >
+                {showAllProblematic ? 'Top 5' : 'Alle'} 
+                <span className="ml-1">{showAllProblematic ? '▲' : '▼'}</span>
+              </button>
+            </div>
           </div>
 
           {filteredProblematicData.length === 0 ? (
@@ -403,7 +418,7 @@ const Dashboard: React.FC = () => {
         {/* Widget 2: Conversion Performance */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <div className="flex justify-between items-center mb-4">
-            <div>
+            <div className="flex-1">
               <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center">
                 🚌 Probleme vor der Anreise
                 <span className="ml-2 text-sm font-normal text-gray-500">
@@ -414,13 +429,24 @@ const Dashboard: React.FC = () => {
                 Abbrüche zwischen Bestätigung und Anreise
               </p>
             </div>
-            <button
-              onClick={() => setShowAllConversion(!showAllConversion)}
-              className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-colors"
-            >
-              {showAllConversion ? 'Top 5' : 'Alle'} 
-              <span className="ml-1">{showAllConversion ? '▲' : '▼'}</span>
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setInfoModalOpen('cancellations')}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title="Information anzeigen"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setShowAllConversion(!showAllConversion)}
+                className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-colors"
+              >
+                {showAllConversion ? 'Top 5' : 'Alle'} 
+                <span className="ml-1">{showAllConversion ? '▲' : '▼'}</span>
+              </button>
+            </div>
           </div>
 
           {filteredConversionData.length === 0 ? (
@@ -480,7 +506,7 @@ const Dashboard: React.FC = () => {
         {/* Widget 3: Durchführungsrate */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <div className="flex justify-between items-center mb-4">
-            <div>
+            <div className="flex-1">
               <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center">
                 🏠 Probleme nach der Anreise
                 <span className="ml-2 text-sm font-normal text-gray-500">
@@ -491,13 +517,24 @@ const Dashboard: React.FC = () => {
                 Vorzeitige Beendigungen nach Anreise
               </p>
             </div>
-            <button
-              onClick={() => setShowAllCompletion(!showAllCompletion)}
-              className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-colors"
-            >
-              {showAllCompletion ? 'Top 5' : 'Alle'} 
-              <span className="ml-1">{showAllCompletion ? '▲' : '▼'}</span>
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setInfoModalOpen('terminations')}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title="Information anzeigen"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setShowAllCompletion(!showAllCompletion)}
+                className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-colors"
+              >
+                {showAllCompletion ? 'Top 5' : 'Alle'} 
+                <span className="ml-1">{showAllCompletion ? '▲' : '▼'}</span>
+              </button>
+            </div>
           </div>
 
           {filteredCompletionData.length === 0 ? (
@@ -572,6 +609,15 @@ const Dashboard: React.FC = () => {
         detailType={modalData.detailType}
         timePeriod={timePeriod}
       />
+      
+      {/* Info Modals */}
+      {infoModalOpen && (
+        <InfoModal
+          isOpen={true}
+          onClose={() => setInfoModalOpen(null)}
+          type={infoModalOpen}
+        />
+      )}
     </div>
   );
 };
