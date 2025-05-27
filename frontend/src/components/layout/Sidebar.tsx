@@ -247,8 +247,8 @@ const Sidebar: React.FC = () => {
           </h3>
           <CacheStats 
             agencyId={selectedAgency?.agency_id} 
-            showDetails={false}
-            showCategories={false}
+            showDetails={true}
+            showCategories={true}
           />
         </div>
         
