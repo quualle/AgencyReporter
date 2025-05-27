@@ -166,39 +166,39 @@ const Dashboard: React.FC = () => {
   }, [timePeriod]);
 
   const getStatusColor = (rate: number): string => {
-    if (rate >= 15) return 'bg-red-500';
-    if (rate >= 10) return 'bg-yellow-500';
+    if (rate >= 35) return 'bg-red-500';
+    if (rate >= 20) return 'bg-yellow-500';
     return 'bg-green-500';
   };
 
   const getStatusTextColor = (rate: number): string => {
-    if (rate >= 15) return 'text-red-700 dark:text-red-300';
-    if (rate >= 10) return 'text-yellow-700 dark:text-yellow-300';
+    if (rate >= 35) return 'text-red-700 dark:text-red-300';
+    if (rate >= 20) return 'text-yellow-700 dark:text-yellow-300';
     return 'text-green-700 dark:text-green-300';
   };
 
   const getConversionColor = (cancellationRate: number): string => {
-    if (cancellationRate <= 15) return 'bg-green-500';
-    if (cancellationRate <= 30) return 'bg-yellow-500';
-    return 'bg-red-500';
+    if (cancellationRate >= 25) return 'bg-red-500';
+    if (cancellationRate >= 15) return 'bg-yellow-500';
+    return 'bg-green-500';
   };
 
   const getConversionTextColor = (cancellationRate: number): string => {
-    if (cancellationRate <= 15) return 'text-green-700 dark:text-green-300';
-    if (cancellationRate <= 30) return 'text-yellow-700 dark:text-yellow-300';
-    return 'text-red-700 dark:text-red-300';
+    if (cancellationRate >= 25) return 'text-red-700 dark:text-red-300';
+    if (cancellationRate >= 15) return 'text-yellow-700 dark:text-yellow-300';
+    return 'text-green-700 dark:text-green-300';
   };
 
   const getCompletionColor = (earlyTerminationRate: number): string => {
-    if (earlyTerminationRate <= 25) return 'bg-green-500';
-    if (earlyTerminationRate <= 40) return 'bg-yellow-500';
-    return 'bg-red-500';
+    if (earlyTerminationRate >= 25) return 'bg-red-500';
+    if (earlyTerminationRate >= 15) return 'bg-yellow-500';
+    return 'bg-green-500';
   };
 
   const getCompletionTextColor = (earlyTerminationRate: number): string => {
-    if (earlyTerminationRate <= 25) return 'text-green-700 dark:text-green-300';
-    if (earlyTerminationRate <= 40) return 'text-yellow-700 dark:text-yellow-300';
-    return 'text-red-700 dark:text-red-300';
+    if (earlyTerminationRate >= 25) return 'text-red-700 dark:text-red-300';
+    if (earlyTerminationRate >= 15) return 'text-yellow-700 dark:text-yellow-300';
+    return 'text-green-700 dark:text-green-300';
   };
 
   if (isLoading) {
