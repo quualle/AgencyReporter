@@ -182,6 +182,7 @@ const Sidebar: React.FC = () => {
                 <sup className="text-[8px] font-normal text-yellow-600 ml-0.5">In Entwicklung</sup>
               </Link>
             </li>
+            {/* Temporär ausgeblendet - werden vermutlich nicht mehr programmiert
             <li>
               <Link 
                 to="/strength-weakness"
@@ -229,6 +230,7 @@ const Sidebar: React.FC = () => {
                 Agenturvergleich
               </Link>
             </li>
+            */}
           </ul>
         </nav>
         
