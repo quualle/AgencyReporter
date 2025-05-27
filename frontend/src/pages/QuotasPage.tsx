@@ -82,10 +82,10 @@ const QuotasPage: React.FC = () => {
   const [earlyEndReasons, setEarlyEndReasons] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [showQuotaDetails, setShowQuotaDetails] = useState<boolean>(false);
+  const [showQuotaDetails, setShowQuotaDetails] = useState<boolean>(true);
   const [historicalData, setHistoricalData] = useState<any>(null);
   const [periodComparisonData, setPeriodComparisonData] = useState<any>(null);
-  const [showTrendAnalysis, setShowTrendAnalysis] = useState<boolean>(false);
+  const [showTrendAnalysis, setShowTrendAnalysis] = useState<boolean>(true);
   const [showAgencyComparison, setShowAgencyComparison] = useState<boolean>(false);
   const [comparisonAgencies, setComparisonAgencies] = useState<AgencyComparisonItem[]>([]);
   const [selectedComparisonAgencies, setSelectedComparisonAgencies] = useState<string[]>([]);
@@ -1754,33 +1754,10 @@ const QuotasPage: React.FC = () => {
           </div>
         </div>
         
-        <div className="flex justify-end space-x-4 mb-4">
-            <button 
-              onClick={() => setShowQuotaDetails(!showQuotaDetails)} 
-            className={`flex items-center px-4 py-2 rounded ${
-              showQuotaDetails 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-            } hover:opacity-90 transition-colors`}
-          >
-            📊 {showQuotaDetails ? 'Analyse ausblenden' : 'Abbruchrate analysieren'}
-          </button>
-          
-          <button 
-            onClick={() => setShowTrendAnalysis(!showTrendAnalysis)} 
-            className={`flex items-center px-4 py-2 rounded ${
-              showTrendAnalysis 
-                ? 'bg-green-600 text-white' 
-                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-            } hover:opacity-90 transition-colors`}
-          >
-            📈 {showTrendAnalysis ? 'Trends ausblenden' : 'Trendanalyse anzeigen'}
-            </button>
-          </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Linke Spalte für Trendanalyse, wenn aktiv */}
-          <div className={`${showTrendAnalysis ? 'block' : 'hidden'} p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md h-fit`}>
+          <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md h-fit">
             <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">
               Trend-Analyse: Quoten im Zeitverlauf
               <span className="ml-2 text-xs font-normal px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded">Neu</span>
@@ -1900,20 +1877,9 @@ const QuotasPage: React.FC = () => {
           )}
         </div>
         
-        {showQuotaDetails && cancellationRateData && timingData && avgCancellationStats && (
+        {cancellationRateData && timingData && avgCancellationStats && (
           <div className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg border-l-4 border-blue-500 border-t border-r border-b border-gray-300 dark:border-gray-600 shadow-md">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Analyse: Abbruchrate vor Anreise</h3>
-              <button 
-                onClick={() => setShowQuotaDetails(false)} 
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
-            </div>
+            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">Analyse: Abbruchrate vor Anreise</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <div className="flex items-baseline space-x-4 mb-4">
@@ -1983,151 +1949,6 @@ const QuotasPage: React.FC = () => {
           </div>
         )}
         
-        {cancellationReasons && (
-          <div className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md">
-            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">
-              Abbruch-Gründe Analyse
-              <span className="ml-2 text-sm font-normal px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 rounded">In Entwicklung</span>
-            </h3>
-            <div className="mb-3 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded text-sm text-yellow-800 dark:text-yellow-200">
-              <strong>Hinweis:</strong> Diese Funktion befindet sich noch in der Entwicklung. Die angezeigten Daten sind Platzhalter und werden in Zukunft durch echte Analysedaten ersetzt.
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <div className="flex items-baseline space-x-4 mb-4">
-                  <div className="text-center">
-                    <span className="text-3xl font-bold text-gray-700 dark:text-gray-300">
-                      {cancellationReasons.total_cancellations}
-                    </span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Gesamte Abbrüche</p>
-                  </div>
-          </div>
-          
-                <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Warum brechen Agenturen ab?</h4>
-                <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={prepareReasonsData(cancellationReasons.cancellation_reasons, cancellationReasons.total_cancellations)}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={true}
-                        label={({ name, percentage }) => `${name}: ${percentage}`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {prepareReasonsData(cancellationReasons.cancellation_reasons, cancellationReasons.total_cancellations).map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value, name, props) => [`${value} (${props.payload.percentage})`, name]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-              
-              <div>
-                <h4 className="font-medium text-md mb-4 text-gray-700 dark:text-gray-200">Aufschlüsselung der Abbruch-Gründe</h4>
-                <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                  <thead>
-                    <tr>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Grund</th>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Anzahl</th>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Anteil</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                    {cancellationReasons.cancellation_reasons && Object.entries(cancellationReasons.cancellation_reasons).map(([reason, count], index) => (
-                      <tr key={index} className={index % 2 === 0 ? 'bg-gray-50 dark:bg-gray-900' : 'bg-white dark:bg-gray-800'}>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                          {reason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{count as number}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                          {formatPercentage(((count as number) / cancellationReasons.total_cancellations) * 100)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {earlyEndReasons && (
-          <div className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md">
-            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">
-              Vorzeitige Beendigungs-Gründe
-              <span className="ml-2 text-sm font-normal px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 rounded">In Entwicklung</span>
-            </h3>
-            <div className="mb-3 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded text-sm text-yellow-800 dark:text-yellow-200">
-              <strong>Hinweis:</strong> Diese Funktion befindet sich noch in der Entwicklung. Die angezeigten Daten sind Platzhalter und werden in Zukunft durch echte Analysedaten ersetzt.
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <div className="flex items-baseline space-x-4 mb-4">
-                  <div className="text-center">
-                    <span className="text-3xl font-bold text-gray-700 dark:text-gray-300">
-                      {earlyEndReasons.total_early_ends}
-                    </span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Gesamte vorzeitige Beendigungen</p>
-                  </div>
-                </div>
-                
-                <h4 className="font-medium text-md mb-2 text-gray-700 dark:text-gray-200">Warum beenden Pflegekräfte vorzeitig?</h4>
-                <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={prepareReasonsData(earlyEndReasons.early_end_reasons, earlyEndReasons.total_early_ends)}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={true}
-                        label={({ name, percentage }) => `${name}: ${percentage}`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {prepareReasonsData(earlyEndReasons.early_end_reasons, earlyEndReasons.total_early_ends).map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value, name, props) => [`${value} (${props.payload.percentage})`, name]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-              
-              <div>
-                <h4 className="font-medium text-md mb-4 text-gray-700 dark:text-gray-200">Aufschlüsselung der Beendigungs-Gründe</h4>
-                <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                  <thead>
-                    <tr>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Grund</th>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Anzahl</th>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Anteil</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                    {earlyEndReasons.early_end_reasons && Object.entries(earlyEndReasons.early_end_reasons).map(([reason, count], index) => (
-                      <tr key={index} className={index % 2 === 0 ? 'bg-gray-50 dark:bg-gray-900' : 'bg-white dark:bg-gray-800'}>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                          {reason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{count as number}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                          {formatPercentage(((count as number) / earlyEndReasons.total_early_ends) * 100)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
         
         {showAgencyComparison && (
           <div className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 shadow-md">
