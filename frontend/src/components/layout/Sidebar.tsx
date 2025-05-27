@@ -237,10 +237,18 @@ const Sidebar: React.FC = () => {
           <TimeFilter />
         </div>
         
-        <div className="mt-6">
+        {/* Cache Status in Sidebar */}
+        <div className="mt-6 bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center">
+            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+            </svg>
+            Daten-Cache
+          </h3>
           <CacheStats 
             agencyId={selectedAgency?.agency_id} 
-            showDetails={selectedAgency ? true : false}
+            showDetails={false}
+            showCategories={false}
           />
         </div>
         
