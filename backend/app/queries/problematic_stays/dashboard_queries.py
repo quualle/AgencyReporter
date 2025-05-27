@@ -40,7 +40,7 @@ problematic_counts AS (
     `gcpxbixpflegehilfesenioren.AgencyReporter.problematic_stays` p
   WHERE
     p.analysis_status = 'analyzed'
-    AND p.created_at BETWEEN @start_date AND @end_date
+    AND p.event_date BETWEEN @start_date AND @end_date
   GROUP BY
     p.agency_id
 )
