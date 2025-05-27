@@ -64,10 +64,14 @@ const Dashboard: React.FC = () => {
   const [infoModalOpen, setInfoModalOpen] = useState<'problematic' | 'cancellations' | 'terminations' | null>(null);
 
   useEffect(() => {
+    console.log('🔄 Dashboard useEffect triggered with timePeriod:', timePeriod);
+    
     const fetchDashboardData = async () => {
       try {
         setIsLoading(true);
         setError(null);
+        
+        console.log(`📊 Fetching dashboard data for period: ${timePeriod}`);
         
         // Schritt 1: Problematische Einsätze laden
         const problematicResponse = await apiService.getProblematicStaysOverview(undefined, timePeriod, false, true);
@@ -95,6 +99,7 @@ const Dashboard: React.FC = () => {
         }
 
         // Schritt 2: Echte Conversion-Daten für alle Agenturen laden
+        console.log(`📊 Fetching conversion stats for period: ${timePeriod}`);
         const conversionResponse = await apiService.getAllAgenciesConversionStats(timePeriod, false, true);
         console.log('Dashboard conversion data:', conversionResponse);
         
@@ -124,6 +129,7 @@ const Dashboard: React.FC = () => {
         }
 
         // Schritt 3: Completion-Daten für alle Agenturen laden
+        console.log(`📊 Fetching completion stats for period: ${timePeriod}`);
         const completionResponse = await apiService.getAllAgenciesCompletionStats(timePeriod, false, true);
         console.log('Dashboard completion data:', completionResponse);
         
