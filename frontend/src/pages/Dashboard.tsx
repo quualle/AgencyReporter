@@ -5,6 +5,7 @@ import Loading from '../components/common/Loading';
 import ErrorMessage from '../components/common/ErrorMessage';
 import StayDetailsModal from '../components/common/StayDetailsModal';
 import InfoModal from '../components/common/InfoModal';
+import ConfirmedCareStaysWidget from '../components/dashboard/ConfirmedCareStaysWidget';
 
 interface AgencyProblematicData {
   agency_id: string;
@@ -76,8 +77,15 @@ const Dashboard: React.FC = () => {
         
         console.log(`📊 Fetching dashboard data for period: ${timePeriod}`);
         
-        // Schritt 1: Dashboard-spezifische Daten laden
-        const dashboardResponse = await apiService.getDashboardProblematicOverview(timePeriod, true, false);
+        // Schritt 1: Dashboard-spezifische Daten laden mit Timeout
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 30000)
+        );
+        
+        const dashboardResponse = await Promise.race([
+          apiService.getDashboardProblematicOverview(timePeriod, false, false),
+          timeoutPromise
+        ]);
         
         console.log('Dashboard overview data:', dashboardResponse);
         
@@ -524,11 +532,30 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Placeholder für weitere Widgets */}
-      <div className="text-center py-12 text-gray-500">
-        <div className="text-4xl mb-4">🚧</div>
-        <h3 className="text-lg font-medium mb-2">Weitere Widgets folgen</h3>
-        <p>5 weitere Dashboard-Widgets werden schrittweise implementiert</p>
+      {/* Neue Widget-Sektion */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">
+          📊 Agentur-Kennzahlen
+        </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          {/* Widget für bestätigte Care Stays */}
+          <ConfirmedCareStaysWidget timePeriod={timePeriod} />
+          
+          {/* Placeholder für weitere Widgets */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex items-center justify-center text-gray-500">
+            <div className="text-center">
+              <div className="text-3xl mb-2">📈</div>
+              <p>Weitere Widgets folgen</p>
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex items-center justify-center text-gray-500">
+            <div className="text-center">
+              <div className="text-3xl mb-2">📊</div>
+              <p>Weitere Widgets folgen</p>
+            </div>
+          </div>
+        </div>
       </div>
       
       {/* Details Modal */}

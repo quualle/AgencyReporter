@@ -945,6 +945,38 @@ export const databaseCacheService = {
       console.error('Error getting cache stats:', error);
       return {};
     }
+  },
+
+  // Care Stays
+  getConfirmedCareStays: async (
+    timePeriod: string = 'last_quarter',
+    agencyId?: string,
+    forceRefresh: boolean = false,
+    useExtendedCache: boolean = false
+  ): Promise<any> => {
+    try {
+      const params: Record<string, any> = { time_period: timePeriod };
+      if (agencyId) {
+        params.agency_id = agencyId;
+      }
+      
+      const data = await cachedApiCall(
+        '/care_stays/confirmed',
+        params,
+        { useExtendedCache, forceRefresh }
+      );
+      
+      console.log(`✅ Got confirmed care stays, period ${timePeriod}`);
+      return data;
+    } catch (error) {
+      console.error('Error fetching confirmed care stays:', error);
+      return {
+        time_period: timePeriod,
+        agencies: [],
+        total_confirmed_stays: 0,
+        agency_count: 0
+      };
+    }
   }
 };
 

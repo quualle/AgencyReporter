@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import logging
 from dotenv import load_dotenv
-from .routes import agencies, quotas, reaction_times, profile_quality, quotas_with_reasons, problematic_stays, cache
+from .routes import agencies, quotas, reaction_times, profile_quality, quotas_with_reasons, problematic_stays, cache, care_stays
 from .dependencies import get_settings
 from .utils.database_connection import initialize_database
 
@@ -68,6 +68,7 @@ app.include_router(quotas_with_reasons.router, prefix="/api/quotas_with_reasons"
 app.include_router(reaction_times.router, prefix="/api/reaction_times", tags=["reaction times"])
 app.include_router(profile_quality.router, prefix="/api/profile_quality", tags=["profile quality"])
 app.include_router(problematic_stays.router, prefix="/api/problematic_stays", tags=["problematic stays"])
+app.include_router(care_stays.router, prefix="/api/care_stays", tags=["care stays"])
 app.include_router(cache.router, prefix="/api/cache", tags=["cache management"])
 
 @app.get("/api/health")
