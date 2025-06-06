@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+      - BIGQUERY_PROJECT_ID=gcpxbixpflegehilfesenioren
+      - BIGQUERY_DATASET=AgencyReporter
+    volumes:
+      - ./credentials.json:/app/credentials.json:ro
+      - ./backend/database:/app/database
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
