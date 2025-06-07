@@ -212,3 +212,72 @@ class DataFreshness(Base):
 
     def __repr__(self):
         return f"<DataFreshness(data_type='{self.data_type}', agency_id='{self.agency_id}', is_fresh={self.is_fresh}, age={self.get_age_hours():.1f}h)>"
+
+
+class CVAnalysisResult(Base):
+    """
+    Stores CV quality analysis results for care stays.
+    """
+    __tablename__ = "cv_analysis_results"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    care_stay_id = Column(String(200), nullable=False, index=True)
+    agency_id = Column(String(100), nullable=True, index=True)
+    analysis_date = Column(DateTime, default=func.now(), nullable=False)
+    cv_categories = Column(Text, nullable=True)  # JSON string with category details
+    fulfillment_scores = Column(Text, nullable=True)  # JSON string with category -> score mapping
+    discrepancies = Column(Text, nullable=True)  # JSON string with list of detected discrepancies
+    overall_score = Column(Integer, nullable=True)  # Overall score as float stored as integer (multiply by 10)
+    analysis_details = Column(Text, nullable=True)  # JSON string with additional analysis metadata
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    
+    # Composite indexes for common query patterns
+    __table_args__ = (
+        Index('idx_cv_care_stay', 'care_stay_id'),
+        Index('idx_cv_agency', 'agency_id'),
+        Index('idx_cv_analysis_date', 'analysis_date'),
+        Index('idx_cv_agency_score', 'agency_id', 'overall_score'),
+    )
+    
+    def set_categories(self, categories: Dict[str, Any]) -> None:
+        """Set categories as JSON string."""
+        self.cv_categories = json.dumps(categories, sort_keys=True)
+    
+    def get_categories(self) -> Dict[str, Any]:
+        """Get categories as dictionary."""
+        return json.loads(self.cv_categories) if self.cv_categories else {}
+    
+    def set_fulfillment_scores(self, scores: Dict[str, float]) -> None:
+        """Set fulfillment scores as JSON string."""
+        self.fulfillment_scores = json.dumps(scores, sort_keys=True)
+    
+    def get_fulfillment_scores(self) -> Dict[str, float]:
+        """Get fulfillment scores as dictionary."""
+        return json.loads(self.fulfillment_scores) if self.fulfillment_scores else {}
+    
+    def set_discrepancies(self, discrepancies: list) -> None:
+        """Set discrepancies as JSON string."""
+        self.discrepancies = json.dumps(discrepancies, sort_keys=True)
+    
+    def get_discrepancies(self) -> list:
+        """Get discrepancies as list."""
+        return json.loads(self.discrepancies) if self.discrepancies else []
+    
+    def set_analysis_details(self, details: Dict[str, Any]) -> None:
+        """Set analysis details as JSON string."""
+        self.analysis_details = json.dumps(details, sort_keys=True)
+    
+    def get_analysis_details(self) -> Dict[str, Any]:
+        """Get analysis details as dictionary."""
+        return json.loads(self.analysis_details) if self.analysis_details else {}
+    
+    def set_overall_score(self, score: float) -> None:
+        """Set overall score (store as integer by multiplying by 10)."""
+        self.overall_score = int(score * 10)
+    
+    def get_overall_score(self) -> float:
+        """Get overall score as float."""
+        return self.overall_score / 10.0 if self.overall_score is not None else 5.0
+    
+    def __repr__(self):
+        return f"<CVAnalysisResult(care_stay_id='{self.care_stay_id}', agency_id='{self.agency_id}', overall_score={self.get_overall_score()})>"

@@ -3,6 +3,7 @@ import json
 from typing import Dict, List, Any, Optional
 from openai import OpenAI
 from dotenv import load_dotenv
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -230,4 +231,148 @@ class OpenAIIntegration:
             
         except Exception as e:
             print(f"Error generating performance summary: {str(e)}")
-            return "Zusammenfassung konnte nicht generiert werden." 
+            return "Zusammenfassung konnte nicht generiert werden."
+    
+    async def analyze_cv_quality(
+        self, 
+        cv_content: str,
+        communications: Dict[str, Any],
+        care_stay_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Analyze CV quality by comparing claims with customer communications
+        """
+        
+        # Prepare communications text
+        comm_text = ""
+        for email in communications.get("emails", []):
+            comm_text += f"\n\nEmail from {email['sender']} on {email['date']}:\n"
+            comm_text += f"Subject: {email['subject']}\n"
+            comm_text += f"Body: {email['body'][:1000]}...\n" if len(email['body']) > 1000 else f"Body: {email['body']}\n"
+        
+        for ticket in communications.get("tickets", []):
+            comm_text += f"\n\nTicket from {ticket['sender']} on {ticket['date']}:\n"
+            comm_text += f"Subject: {ticket['subject']}\n"
+            comm_text += f"Body: {ticket['body'][:1000]}...\n" if len(ticket['body']) > 1000 else f"Body: {ticket['body']}\n"
+        
+        # Create the analysis prompt
+        prompt = f"""
+You are analyzing the quality of a caregiver's CV by comparing their claims with actual customer feedback.
+
+CARE STAY INFORMATION:
+- Care Stay ID: {care_stay_info['care_stay_id']}
+- Agency: {care_stay_info['agency_name']}
+- Caregiver: {care_stay_info['caregiver_name']}
+- Duration: {care_stay_info['start_date']} to {care_stay_info['end_date']}
+- Status: {care_stay_info['status']}
+
+CV CONTENT:
+{cv_content}
+
+CUSTOMER COMMUNICATIONS (Emails and Tickets):
+{comm_text}
+
+TASK:
+Analyze the CV claims against the customer communications. For each category below, assess if the CV claims match the reality experienced by the customer.
+
+Categories to analyze:
+1. German Language Skills (Deutschkenntnisse)
+2. Years of Experience / Professional Skills
+3. Driver's License (if mentioned)
+4. Smoking Status (if mentioned)
+5. Age (if mentioned)
+6. Personal Characteristics / Soft Skills
+
+For each category:
+- Extract the CV claim
+- Look for evidence in communications that confirms or contradicts the claim
+- Assign a fulfillment score (1-5, where 5 = fully matches, 1 = completely false)
+- Provide confidence level (0-1) in your assessment
+- List specific evidence quotes
+
+IMPORTANT:
+- Start with benefit of doubt (assume 5/5 unless evidence suggests otherwise)
+- Only lower scores if there's clear evidence of disappointment or mismatch
+- Consider if customer expectations were realistic
+- Focus on factual discrepancies, not subjective preferences
+
+Return a JSON object with this structure:
+{{
+    "categories": {{
+        "german_skills": {{
+            "category_name": "German Language Skills",
+            "cv_claim": "...",
+            "fulfillment_score": 5,
+            "confidence": 0.9,
+            "evidence": ["quote1", "quote2"],
+            "discrepancy_detected": false
+        }},
+        // ... other categories
+    }},
+    "fulfillment_scores": {{
+        "german_skills": 5,
+        "experience": 5,
+        "drivers_license": 5,
+        "smoking": 5,
+        "age": 5,
+        "soft_skills": 5
+    }},
+    "discrepancies": [
+        {{
+            "category": "...",
+            "cv_claim": "...",
+            "reality": "...",
+            "severity": "high/medium/low"
+        }}
+    ],
+    "overall_score": 5.0,
+    "details": {{
+        "total_communications_analyzed": {len(communications.get('emails', [])) + len(communications.get('tickets', []))},
+        "negative_mentions_found": 0,
+        "positive_mentions_found": 0
+    }},
+    "recommendations": [
+        "..."
+    ]
+}}
+"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are an expert at analyzing CV quality and detecting discrepancies between claims and reality. Always be fair and objective."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            result['analysis_date'] = datetime.now().isoformat()
+            result['care_stay_id'] = care_stay_info['care_stay_id']
+            
+            return result
+            
+        except Exception as e:
+            # Return a default structure in case of error
+            return {
+                "care_stay_id": care_stay_info['care_stay_id'],
+                "analysis_date": datetime.now().isoformat(),
+                "categories": {},
+                "fulfillment_scores": {
+                    "german_skills": 5,
+                    "experience": 5,
+                    "drivers_license": 5,
+                    "smoking": 5,
+                    "age": 5,
+                    "soft_skills": 5
+                },
+                "discrepancies": [],
+                "overall_score": 5.0,
+                "details": {
+                    "error": str(e),
+                    "total_communications_analyzed": 0
+                },
+                "recommendations": ["Analysis failed - manual review required"]
+            } 

@@ -97,4 +97,15 @@ def get_bigquery_client():
             continue
     
     # If we get here, all paths failed
-    raise ValueError(f"Failed to create BigQuery client. Last error: {last_error}") 
+    raise ValueError(f"Failed to create BigQuery client. Last error: {last_error}")
+
+
+async def get_db():
+    """
+    Get database session for dependency injection
+    """
+    from .utils.database_connection import get_database_manager
+    
+    db_manager = get_database_manager()
+    async with db_manager.get_session() as session:
+        yield session 

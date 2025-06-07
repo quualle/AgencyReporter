@@ -129,4 +129,87 @@ class StrengthWeaknessAnalysis(BaseModel):
     strengths: List[Dict[str, Any]]
     weaknesses: List[Dict[str, Any]]
     neutral: List[Dict[str, Any]]
-    overall_score: float 
+    overall_score: float
+
+
+# CV Quality Analysis Models
+class CareStayInfo(BaseModel):
+    """Model for care stay information"""
+    care_stay_id: str
+    agency_id: str
+    agency_name: str
+    customer_id: str
+    start_date: Optional[str]
+    end_date: Optional[str]
+    status: str
+    cancellation_reason: Optional[str]
+    cancelled_before_arrival: bool
+    duration_days: Optional[int]
+    # Caregiver Instance Daten
+    caregiver_instance_id: str
+    caregiver_id: str
+    caregiver_birthday: Optional[str]
+    caregiver_experience: Optional[str]
+    caregiver_experience_germany: Optional[str]
+    caregiver_description: Optional[str]
+    caregiver_phone: Optional[str]
+    caregiver_external_id: Optional[str]
+    caregiver_german_score: Optional[str]  # Deutschnote (1-5 oder 1-6 Skala)
+    caregiver_german_level: Optional[str]  # Interpretierte Deutschkenntnisse
+    # Caregiver Basis Daten
+    caregiver_first_name: Optional[str]
+    caregiver_last_name: Optional[str]
+    caregiver_full_name: Optional[str]
+    caregiver_gender: Optional[str]
+    caregiver_salutation: Optional[str]
+    # Household/Customer Daten
+    household_id: Optional[str]
+    lead_id: Optional[str]
+    household_designation: Optional[str]
+    is_customer: Optional[str]
+    household_notes: Optional[str]
+    # Lead Contact Info (Ansprechpartner/Entscheider)
+    lead_first_name: Optional[str]
+    lead_last_name: Optional[str]
+    lead_full_name: Optional[str]
+    lead_email: Optional[str]
+    lead_phone: Optional[str]
+    lead_sales_partner: Optional[str]  # Vertriebspartner
+    # Care Location (wo die Pflege stattfindet)
+    care_location_street: Optional[str]
+    care_location_zip: Optional[str]
+    care_location_city: Optional[str]
+    care_location_full: Optional[str]
+    # Care Receiver Info (Pflegebedürftiger)
+    care_receiver_first_name: Optional[str]
+    care_receiver_last_name: Optional[str]
+    care_receiver_full_name: Optional[str]
+    care_receiver_care_level: Optional[str]
+
+
+class CVAnalysisRequest(BaseModel):
+    """Model for CV analysis request"""
+    care_stay_id: str
+    cv_content: str
+
+
+class CVCategory(BaseModel):
+    """Model for individual CV category analysis"""
+    category_name: str
+    cv_claim: str
+    fulfillment_score: float  # 1-5 scale
+    confidence: float  # 0-1 confidence in the assessment
+    evidence: List[str]  # Quotes from communications
+    discrepancy_detected: bool
+
+
+class CVAnalysisResult(BaseModel):
+    """Model for complete CV analysis result"""
+    care_stay_id: str
+    analysis_date: datetime
+    categories: Dict[str, CVCategory]
+    fulfillment_scores: Dict[str, float]
+    discrepancies: List[Dict[str, Any]]
+    overall_score: float
+    details: Dict[str, Any]
+    recommendations: List[str] 
